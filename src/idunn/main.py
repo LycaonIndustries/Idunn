@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import ingredients, inventory
+from .api import ingredients, inventory, recipes
 from .config import settings
 from .db import MongoClient
 
