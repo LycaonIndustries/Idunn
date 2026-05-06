@@ -55,6 +55,7 @@ app.add_middleware(
 # Include routers
 app.include_router(inventory.router)
 app.include_router(ingredients.router)
+app.include_router(recipes.router)
 
 
 @app.get("/health", tags=["health"])

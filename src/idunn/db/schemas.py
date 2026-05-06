@@ -162,6 +162,114 @@ INGREDIENTS_SCHEMA: dict[str, Any] = {
     },
 }
 
+# JSON Schema for recipes collection
+RECIPES_SCHEMA: dict[str, Any] = {
+    "bsonType": "object",
+    "required": ["title", "created_at", "updated_at"],
+    "properties": {
+        "_id": {"bsonType": "objectId"},
+        "title": {
+            "bsonType": "string",
+            "minLength": 1,
+            "maxLength": 300,
+            "description": "Recipe title",
+        },
+        "description": {
+            "bsonType": ["string", "null"],
+            "maxLength": 2000,
+            "description": "Recipe description",
+        },
+        "ingredients": {
+            "bsonType": "array",
+            "items": {
+                "bsonType": "object",
+                "required": ["name"],
+                "properties": {
+                    "name": {"bsonType": "string", "minLength": 1, "maxLength": 200},
+                    "quantity": {"bsonType": ["double", "null"], "minimum": 0},
+                    "unit": {"bsonType": ["string", "null"], "maxLength": 50},
+                    "optional": {"bsonType": "bool"},
+                    "group": {"bsonType": ["string", "null"], "maxLength": 100},
+                    "notes": {"bsonType": ["string", "null"], "maxLength": 200},
+                },
+            },
+            "description": "Recipe ingredients",
+        },
+        "steps": {
+            "bsonType": "array",
+            "items": {
+                "bsonType": "object",
+                "required": ["step_number", "instruction"],
+                "properties": {
+                    "step_number": {"bsonType": "int", "minimum": 1},
+                    "instruction": {"bsonType": "string", "minLength": 1},
+                    "time_minutes": {"bsonType": ["int", "null"], "minimum": 0},
+                },
+            },
+        },
+        "region": {
+            "bsonType": ["string", "null"],
+            "enum": [
+                "north_india",
+                "south_india",
+                "east_india",
+                "west_india",
+                "central_india",
+                "northeast_india",
+                "pan_india",
+            ],
+        },
+        "cuisine_type": {
+            "bsonType": ["string", "null"],
+            "enum": ["veg", "non_veg", "egg", "vegan"],
+        },
+        "difficulty": {
+            "bsonType": ["string", "null"],
+            "enum": ["easy", "medium", "hard"],
+        },
+        "prep_time_minutes": {"bsonType": ["int", "null"], "minimum": 0},
+        "cook_time_minutes": {"bsonType": ["int", "null"], "minimum": 0},
+        "servings": {"bsonType": ["int", "null"], "minimum": 1},
+        "source_url": {"bsonType": ["string", "null"], "maxLength": 500},
+        "source_name": {"bsonType": ["string", "null"], "maxLength": 100},
+        "image_url": {"bsonType": ["string", "null"], "maxLength": 500},
+        "video_url": {"bsonType": ["string", "null"], "maxLength": 500},
+        "tags": {"bsonType": "array", "items": {"bsonType": "string"}},
+        "nutrition": {
+            "bsonType": ["object", "null"],
+            "properties": {
+                "calories": {"bsonType": ["double", "null"], "minimum": 0},
+                "protein": {"bsonType": ["double", "null"], "minimum": 0},
+                "carbs": {"bsonType": ["double", "null"], "minimum": 0},
+                "fat": {"bsonType": ["double", "null"], "minimum": 0},
+                "fiber": {"bsonType": ["double", "null"], "minimum": 0},
+            },
+        },
+        "embedding": {
+            "bsonType": ["array", "null"],
+            "items": {"bsonType": "double"},
+            "description": "Recipe embedding vector",
+        },
+        "normalized_ingredients": {
+            "bsonType": "array",
+            "items": {"bsonType": "string"},
+            "description": "Normalized ingredient IDs",
+        },
+        "ingest_source": {
+            "bsonType": ["string", "null"],
+            "maxLength": 50,
+            "description": "Source type: json-ld, blog, youtube, manual",
+        },
+        "ingest_confidence": {
+            "bsonType": ["double", "null"],
+            "minimum": 0.0,
+            "maximum": 1.0,
+        },
+        "created_at": {"bsonType": "date"},
+        "updated_at": {"bsonType": "date"},
+    },
+}
+
 
 async def create_collection_with_validation(
     db, collection_name: str, schema: dict
@@ -207,3 +315,13 @@ async def setup_database_validation(db) -> None:
         target_db = db.client[db_name]
         for coll_name, schema in schema_map.items():
             await create_collection_with_validation(target_db, coll_name, schema)
+
+
+# Add recipes to the collections dict
+collections = {
+    settings.mongodb_db_name: {
+        "items": ITEMS_SCHEMA,
+        "ingredients": INGREDIENTS_SCHEMA,
+        "recipes": RECIPES_SCHEMA,
+    }
+}

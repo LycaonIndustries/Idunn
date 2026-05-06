@@ -64,6 +64,11 @@ COLLECTION_NUTRITION = "nutrition"
 COLLECTION_EVAL_RUNS = "eval_runs"
 
 
+def get_collection(collection_name: str):
+    """Get a collection by name."""
+    return MongoClient.get_db()[collection_name]
+
+
 class MongoDocument(BaseModel):
     """Base class for documents stored in MongoDB."""
 
