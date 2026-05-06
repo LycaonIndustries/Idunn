@@ -6,7 +6,7 @@ Supports FEFO (First Expire First Out) ordering, Indian units
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from enum import Enum
 from typing import Optional
 
@@ -154,19 +154,17 @@ class Item(ItemBase):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     consumed: bool = Field(False, description="Marked as consumed/discarded")
 
-    @property
     def is_expiring_soon(self, days: int = 3) -> bool:
         """Check if item expires within given days."""
         if not self.expiry_date:
             return False
-        return self.expiry_date <= datetime.utcnow() + timedelta(days=days)
+        return self.expiry_date <= datetime.now(UTC) + timedelta(days=days)
 
-    @property
     def is_expired(self) -> bool:
         """Check if item is past expiry."""
         if not self.expiry_date:
             return False
-        return self.expiry_date < datetime.utcnow()
+        return self.expiry_date < datetime.now(UTC)
 
     def convert_quantity(self, target_unit: Unit) -> Optional[float]:
         """Convert quantity to target unit if conversion exists."""
