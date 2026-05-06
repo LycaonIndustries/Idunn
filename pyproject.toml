@@ -13,6 +13,10 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pydantic-settings>=2.14.0",
     "httpx>=0.28.1",
+    "scrape-schema-recipe>=0.2.2",
+    "yt-dlp>=2026.3.17",
+    "faster-whisper>=1.2.1",
+    "anthropic>=0.100.0",
 ]
 
 [dependency-groups]

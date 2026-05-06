@@ -166,16 +166,35 @@ async def ingest_recipe(
 ):
     """Ingest a recipe from a URL (JSON-LD, blog, or YouTube).
 
-    This is a placeholder for Phase 2 implementation.
+    Uses RecipeIngestService for multi-source ingestion.
+    Returns immediately with task acceptance; processing is async.
     """
-    # TODO: Implement in Phase 2
-    # 1. Classify source (JSON-LD, blog, YouTube)
-    # 2. Extract structured data
-    # 3. Normalize ingredients
-    # 4. Generate embedding
-    # 5. Store in MongoDB
+    from ..services.recipe_ingest import RecipeIngestService, IngestSource
 
-    raise HTTPException(
-        status_code=501,
-        detail="Recipe ingest not yet implemented. Coming in Phase 2.",
-    )
+    # Determine source type (simple heuristic)
+    if "youtube.com" in url or "youtu.be" in url:
+        source_type = IngestSource.YOUTUBE
+    else:
+        source_type = IngestSource.JSON_LD  # Try JSON-LD first
+
+    # Create ingest service
+    service = RecipeIngestService(db)
+
+    # Ingest recipe
+    result = await service.ingest_from_url(url)
+
+    if result.success:
+        return {
+            "message": "Recipe ingested successfully",
+            "recipe_id": result.recipe_id,
+            "confidence": result.confidence,
+            "warnings": result.warnings,
+        }
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": result.message,
+                "warnings": result.warnings,
+            },
+        )
