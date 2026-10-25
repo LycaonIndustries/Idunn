@@ -13,18 +13,10 @@ from idunn.main import app
 from idunn.models.inventory import Unit, Location
 
 
-@pytest.fixture(scope="module")
-def client():
-    """Create test client."""
-    from idunn.db import MongoClient
-
-    # Use test database
-    MongoClient._db = None  # Reset
-    with TestClient(app) as c:
-        yield c
-    # Cleanup
-    import asyncio
-    asyncio.get_event_loop().run_until_complete(MongoClient.close())
+@pytest.fixture
+def client(api_client):
+    """Use an isolated database for each test, never the developer's database."""
+    return api_client
 
 
 @pytest.fixture

@@ -8,11 +8,14 @@ from __future__ import annotations
 
 from typing import Any
 
-
 # JSON Schema for items collection (inventory)
 ITEMS_SCHEMA: dict[str, Any] = {
     "bsonType": "object",
     "required": ["name", "quantity", "unit", "location", "added_at", "consumed"],
+    "anyOf": [
+        {"properties": {"quantity": {"minimum": 0, "exclusiveMinimum": True}}},
+        {"properties": {"consumed": {"enum": [True]}}},
+    ],
     "properties": {
         "_id": {"bsonType": "objectId"},
         "name": {
@@ -23,8 +26,8 @@ ITEMS_SCHEMA: dict[str, Any] = {
         },
         "quantity": {
             "bsonType": "double",
-            "minimum": 0.0001,
-            "description": "Quantity (must be positive)",
+            "minimum": 0,
+            "description": "Remaining quantity; zero requires consumed=true",
         },
         "unit": {
             "bsonType": "string",
@@ -210,6 +213,7 @@ RECIPES_SCHEMA: dict[str, Any] = {
         "region": {
             "bsonType": ["string", "null"],
             "enum": [
+                None,
                 "north_india",
                 "south_india",
                 "east_india",
@@ -221,11 +225,11 @@ RECIPES_SCHEMA: dict[str, Any] = {
         },
         "cuisine_type": {
             "bsonType": ["string", "null"],
-            "enum": ["veg", "non_veg", "egg", "vegan"],
+            "enum": [None, "veg", "non_veg", "egg", "vegan"],
         },
         "difficulty": {
             "bsonType": ["string", "null"],
-            "enum": ["easy", "medium", "hard"],
+            "enum": [None, "easy", "medium", "hard"],
         },
         "prep_time_minutes": {"bsonType": ["int", "null"], "minimum": 0},
         "cook_time_minutes": {"bsonType": ["int", "null"], "minimum": 0},
@@ -267,6 +271,25 @@ RECIPES_SCHEMA: dict[str, Any] = {
         },
         "created_at": {"bsonType": "date"},
         "updated_at": {"bsonType": "date"},
+        "embedding_model": {"bsonType": ["string", "null"]},
+        "needs_review": {"bsonType": "bool"},
+        "extraction_reviewed": {"bsonType": "bool"},
+        "revision": {"bsonType": "int", "minimum": 0},
+        "ingredient_matches": {
+            "bsonType": "array",
+            "items": {
+                "bsonType": "object",
+                "required": ["ingredient_index", "status", "method", "score"],
+                "properties": {
+                    "ingredient_index": {"bsonType": "int", "minimum": 0},
+                    "ingredient_id": {"bsonType": ["string", "null"]},
+                    "suggested_id": {"bsonType": ["string", "null"]},
+                    "score": {"bsonType": ["double", "int"], "minimum": 0, "maximum": 1},
+                    "status": {"enum": ["pending", "confirmed", "ignored"]},
+                    "method": {"enum": ["exact", "vector", "unmatched", "manual"]},
+                },
+            },
+        },
     },
 }
 
@@ -275,8 +298,6 @@ async def create_collection_with_validation(
     db, collection_name: str, schema: dict
 ) -> None:
     """Create a collection with JSON schema validation."""
-    from motor.motor_asyncio import AsyncIOMotorCollection
-
     # Check if collection exists
     existing = await db.list_collection_names()
     if collection_name in existing:
@@ -301,27 +322,12 @@ async def create_collection_with_validation(
 
 async def setup_database_validation(db) -> None:
     """Set up JSON schema validation for all collections."""
-    from ..config import settings
-
-    # Import here to avoid circular imports
-    collections = {
-        settings.mongodb_db_name: {
-            "items": ITEMS_SCHEMA,
-            "ingredients": INGREDIENTS_SCHEMA,
-        }
-    }
-
-    for db_name, schema_map in collections.items():
-        target_db = db.client[db_name]
-        for coll_name, schema in schema_map.items():
-            await create_collection_with_validation(target_db, coll_name, schema)
-
-
-# Add recipes to the collections dict
-collections = {
-    settings.mongodb_db_name: {
+    schemas = {
         "items": ITEMS_SCHEMA,
         "ingredients": INGREDIENTS_SCHEMA,
         "recipes": RECIPES_SCHEMA,
     }
-}
+    for name, schema in schemas.items():
+        await create_collection_with_validation(db, name, schema)
+    await db["recipes"].create_index([("needs_review", 1), ("_id", 1)])
+    await db["recipes"].create_index("source_url")

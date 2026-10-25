@@ -1,5 +1,7 @@
 # Iðunn — Build Summary (2026-05-07)
 
+Historical snapshot. For the 2026-10-07 build and verified results, see [Phase 2 progress](PHASE2_PROGRESS.md). The capability and exit-criteria statements below describe the original build session, not current live-test results.
+
 ## Overview
 
 Successfully initialized and started building **Iðunn — Kitchen Inventory & Meal Planning** per the design doc at `C:\Users\aesir\Work\Projects\Full\Mimir\300 - Work\320 - Personal\322 - Idunn\Idunn-design.md`.

@@ -203,7 +203,7 @@ async def consume_item(
 
     if new_quantity <= 0:
         update_dict["consumed"] = True
-        update_dict["quantity"] = 0
+        update_dict["quantity"] = 0.0
     else:
         update_dict["quantity"] = new_quantity
 

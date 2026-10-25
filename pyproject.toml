@@ -17,6 +17,9 @@ dependencies = [
     "yt-dlp>=2026.3.17",
     "faster-whisper>=1.2.1",
     "anthropic>=0.100.0",
+    "beautifulsoup4>=4.14.0",
+    "readability-lxml>=0.8.4",
+    "isodate>=0.7.2",
 ]
 
 [dependency-groups]
@@ -26,6 +29,7 @@ dev = [
     "pytest>=7.0.0",
     "pytest-asyncio>=0.21.0",
     "hypothesis>=6.0.0",
+    "mongomock-motor>=0.0.36",
 ]
 
 [build-system]

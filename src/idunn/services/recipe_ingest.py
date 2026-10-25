@@ -1,237 +1,100 @@
-"""Recipe ingest service for Iðunn.
-
-Handles multi-source recipe ingestion:
-1. JSON-LD parsing (scrape-schema-recipe)
-2. Blog scraping with Readability + LLM fallback
-3. YouTube transcript extraction (yt-dlp + Whisper)
-4. Ingredient normalization with embedding match
-"""
+"""Source extraction, ingredient matching, validation, and atomic recipe storage."""
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING
 
-from pydantic import BaseModel, Field
+from bson import ObjectId
+from pydantic import BaseModel, Field, ValidationError
 
+if TYPE_CHECKING:
+    from motor.motor_asyncio import AsyncIOMotorDatabase
 
-class IngestSource(str, Enum):
-    """Recipe source types."""
+    from ..config import Settings
 
-    JSON_LD = "json-ld"
-    BLOG = "blog"
-    YOUTUBE = "youtube"
-    MANUAL = "manual"
+from ..config import settings
+from ..db import COLLECTION_RECIPES
+from ..models.recipe import IngredientMatch, Recipe
+from .ingest_errors import ExtractionError
+from .ingredient_matching import IngredientMatcher
+from .recipe_providers import ExtractedRecipe, VoyageEmbedder
+from .recipe_sources import RecipeSourceReader
 
 
 class IngestResult(BaseModel):
-    """Result of recipe ingestion."""
-
-    model_config = {"arbitrary_types_allowed": True}
-
-    success: bool
-    recipe_id: Optional[str] = None
-    confidence: Optional[float] = Field(None, ge=0.0, le=1.0)
-    message: str = ""
+    success: bool = True
+    recipe_id: str
+    confidence: float
+    needs_review: bool
+    message: str = "Recipe imported"
     warnings: list[str] = Field(default_factory=list)
 
 
-class RecipeIngestService:
-    """Service for ingesting recipes from various sources."""
+def confirmed_ids(matches: list[IngredientMatch]) -> list[str]:
+    return list(dict.fromkeys(
+        match.ingredient_id for match in matches
+        if match.status == "confirmed" and match.ingredient_id is not None
+    ))
 
-    def __init__(self, db, anthropic_client=None, embedding_model=None):
+
+class RecipeIngestService:
+    def __init__(self, db: AsyncIOMotorDatabase, config: Settings | None = None,
+                 reader: RecipeSourceReader | None = None, embedder: VoyageEmbedder | None = None):
         self.db = db
-        self.anthropic_client = anthropic_client
-        self.embedding_model = embedding_model
+        self.config = config or settings
+        self.reader = reader or RecipeSourceReader(self.config)
+        self.embedder = embedder or VoyageEmbedder(self.config)
+        self.matcher = IngredientMatcher(db, self.embedder, self.config)
 
     async def ingest_from_url(self, url: str) -> IngestResult:
-        """Ingest a recipe from a URL.
+        extracted, source = await self.reader.from_url(url)
+        return await self.store(extracted, source)
 
-        Tries in order:
-        1. JSON-LD parsing (fastest, most reliable)
-        2. Blog scraping with Readability
-        3. YouTube transcript (if YouTube URL)
-        4. LLM extraction fallback
-        """
-        warnings: list[str] = []
+    async def ingest_from_text(self, text: str, source_name: str) -> IngestResult:
+        extracted, source = await self.reader.from_text(text, source_name)
+        return await self.store(extracted, source)
 
-        # Try JSON-LD first (~70% success rate, zero LLM cost)
-        recipe_data = await self._try_json_ld(url)
-        if recipe_data:
-            # Normalize ingredients
-            normalized_ids, norm_warnings = await self._normalize_ingredients(
-                recipe_data.get("ingredients", [])
+    async def store(self, extracted: ExtractedRecipe, source: str) -> IngestResult:
+        recipe = extracted.recipe
+        if not recipe.title.strip() or not recipe.ingredients or not recipe.steps:
+            raise ExtractionError(
+                "A recipe needs a title, at least one ingredient, and cooking steps."
             )
-            recipe_data["normalized_ingredients"] = normalized_ids
-            warnings.extend(norm_warnings)
-
-            # Generate embedding
-            embedding = await self._generate_embedding(recipe_data)
-            recipe_data["embedding"] = embedding
-
-            # Store in MongoDB
-            recipe_data["ingest_source"] = IngestSource.JSON_LD.value
-            recipe_data["ingest_confidence"] = recipe_data.get(
-                "ingest_confidence", 0.9
-            )
-
-            recipe_id = await self._store_recipe(recipe_data)
-            return IngestResult(
-                success=True,
-                recipe_id=recipe_id,
-                confidence=recipe_data["ingest_confidence"],
-                message="Recipe ingested via JSON-LD",
-                warnings=warnings,
-            )
-
-        # TODO: Implement other methods
-        warnings.append("JSON-LD extraction failed, other methods not yet implemented")
-
-        return IngestResult(
-            success=False,
-            message="Recipe ingest failed. JSON-LD extraction failed.",
-            warnings=warnings,
-        )
-
-    async def _try_json_ld(self, url: str) -> Optional[dict]:
-        """Try to extract recipe using JSON-LD.
-
-        Uses scrape-schema-recipe library.
-        ~70% success rate for modern recipe sites.
-        """
+        if len(recipe.ingredients) > 200 or len(recipe.steps) > 500:
+            raise ExtractionError("This recipe has too many ingredients or steps to import.")
+        matches, warnings = await self.matcher.match(recipe)
+        embedding = None
+        if self.embedder.configured:
+            text = "\n".join([
+                recipe.title, recipe.description or "",
+                *[item.name for item in recipe.ingredients],
+                *[step.instruction for step in recipe.steps],
+            ])
+            embedding = (await self.embedder.embed([text]))[0]
+        else:
+            warnings.append("Embeddings skipped: VOYAGE_API_KEY is not configured.")
+        extraction_reviewed = extracted.confidence >= self.config.extraction_confidence_threshold
         try:
-            from scrape_schema_recipe import scrape_url
-
-            # scrape_url is synchronous, run in thread pool
-            import asyncio
-
-            loop = asyncio.get_event_loop()
-            recipes = await loop.run_in_executor(None, scrape_url, url)
-
-            if not recipes or len(recipes) == 0:
-                return None
-
-            # Take the first recipe found
-            recipe = recipes[0]
-
-            # Map to our schema
-            return {
-                "title": recipe.get("name", ""),
-                "description": recipe.get("description"),
-                "ingredients": [
-                    {"name": ing, "quantity": None, "unit": None}
-                    for ing in recipe.get("recipeIngredient", [])
-                ],
-                "steps": [
-                    {
-                        "step_number": i + 1,
-                        "instruction": step.get("text", "")
-                        if isinstance(step, dict)
-                        else str(step),
-                    }
-                    for i, step in enumerate(recipe.get("recipeInstructions", []))
-                ],
-                "prep_time_minutes": self._parse_duration(
-                    recipe.get("prepTime")
+            document = Recipe(
+                _id=str(ObjectId()), **recipe.model_dump(),
+                embedding=embedding,
+                embedding_model=self.embedder.name if embedding else None,
+                normalized_ingredients=confirmed_ids(matches), ingredient_matches=matches,
+                ingest_source=source, ingest_confidence=extracted.confidence,
+                extraction_reviewed=extraction_reviewed,
+                needs_review=not extraction_reviewed or any(
+                    m.status == "pending" for m in matches
                 ),
-                "cook_time_minutes": self._parse_duration(
-                    recipe.get("cookTime")
-                ),
-                "servings": self._extract_servings(recipe.get("recipeYield")),
-                "image_url": recipe.get("image"),
-                "source_url": url,
-                "source_name": recipe.get("source"),
-                "ingest_source": IngestSource.JSON_LD.value,
-                "ingest_confidence": 1.0 if recipe.get("name") else 0.5,
-            }
-
-        except Exception as e:
-            # Log error and return None
-            print(f"JSON-LD extraction failed: {e}")
-            return None
-
-    def _parse_duration(self, duration_str: Optional[str]) -> Optional[int]:
-        """Parse ISO 8601 duration (PT30M) to minutes."""
-        if not duration_str:
-            return None
-        # Simple parser for PT{H}H{M}M format
-        import re
-
-        match = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?", duration_str)
-        if match:
-            hours = int(match.group(1) or 0)
-            minutes = int(match.group(2) or 0)
-            return hours * 60 + minutes
-        return None
-
-    def _extract_servings(self, yield_str: Optional[str]) -> Optional[int]:
-        """Extract servings from recipeYield (e.g., '4 servings' -> 4)."""
-        if not yield_str:
-            return None
-        import re
-
-        match = re.search(r"(\d+)", str(yield_str))
-        if match:
-            return int(match.group(1))
-        return None
-
-    async def _try_blog_scrape(self, url: str) -> Optional[dict]:
-        """Scrape blog post and extract recipe.
-
-        Uses Readability to extract main content,
-        then LLM to structure the recipe.
-        """
-        # TODO: Implement blog scraping
-        # 1. Fetch HTML with httpx
-        # 2. Extract main content with readability
-        # 3. Use LLM to extract structured recipe
-        return None
-
-    async def _try_youtube(self, url: str) -> Optional[dict]:
-        """Extract recipe from YouTube video.
-
-        Uses yt-dlp to download audio,
-        Whisper to transcribe,
-        LLM to extract structured recipe.
-        """
-        # TODO: Implement YouTube ingest
-        # 1. Download audio with yt-dlp
-        # 2. Transcribe with Whisper (faster-whisper)
-        # 3. Extract recipe with LLM
-        return None
-
-    async def _normalize_ingredients(
-        self, ingredients: list[dict]
-    ) -> tuple[list[str], list[str]]:
-        """Normalize ingredient names to canonical forms.
-
-        Uses embedding match against ingredients collection.
-        Falls back to fuzzy matching.
-        Returns (normalized_ingredient_ids, warnings).
-        """
-        # TODO: Implement ingredient normalization
-        # 1. For each ingredient, generate embedding
-        # 2. Vector search in ingredients collection
-        # 3. If match confidence > threshold, use it
-        # 4. Otherwise, add to manual review queue
-        return [], []
-
-    async def _generate_embedding(self, recipe: dict) -> list[float]:
-        """Generate embedding for recipe (title + ingredients + steps).
-
-        Uses Voyage AI or local BGE-M3.
-        """
-        # TODO: Implement embedding generation
-        # 1. Combine title, ingredients, steps into text
-        # 2. Call embedding API (Voyage or local)
-        # 3. Return vector
-        return []
-
-    async def _store_recipe(self, recipe: dict) -> str:
-        """Store recipe in MongoDB.
-
-        Returns the inserted recipe ID.
-        """
-        collection = self.db[COLLECTION_RECIPES]
-        result = await collection.insert_one(recipe)
-        return str(result.inserted_id)
+            )
+        except ValidationError as exc:
+            raise ExtractionError(
+                "The imported recipe failed validation; nothing was saved."
+            ) from exc
+        # Matches and review state live in the same document: no half-written review queue.
+        data = document.model_dump(exclude={"id"})
+        data["_id"] = ObjectId(document.id)
+        await self.db[COLLECTION_RECIPES].insert_one(data)
+        return IngestResult(
+            recipe_id=document.id, confidence=extracted.confidence,
+            needs_review=document.needs_review, warnings=warnings,
+        )

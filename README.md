@@ -12,7 +12,11 @@ Iðunn is an India-aware kitchen operating system that solves five frictions Wes
 4. **Macro/nutrition for Indian food is broken** — USDA-based DBs miss ghar-ka-khaana
 5. **Multi-cook households** — cooks, maids, and family members share the kitchen
 
-## Features (Planned)
+## Current status — 2026-10-07
+
+Inventory APIs and the Phase 2 recipe-import backend are built. Recipe imports support structured website data, blog/text extraction, a YouTube transcription path, ingredient matching, and a review API. The local suite has 107 passing tests. Live MongoDB/Atlas, model-service, audio and 100-recipe accuracy checks are still pending. See [Phase 2 progress](docs/PHASE2_PROGRESS.md) for verified results, configuration and remaining work.
+
+## Product scope
 
 - **Pantry tracking** with FEFO (First Expire First Out) ordering
 - **Indian unit conversions** (paav, katori, chamcha, tsp, kg, g)
@@ -63,16 +67,18 @@ idunn/
 
 ## Development Phases
 
-### Phase 1 — Inventory Core (Current)
+### Phase 1 — Inventory Core
 - Pydantic models: Item, Ingredient, Location, Unit, UnitConversion
 - CRUD via FastAPI; Mongo schema validation enabled
 - FEFO ordering + expiry alerts
 - Indian unit graph: chamcha ↔ tsp ↔ ml; katori ↔ cup ↔ ml
 - **Exit criteria:** add 50 mixed items; query "expiring this week" returns correctly
 
-### Phase 2 — Recipe Ingest
+### Phase 2 — Recipe Ingest (Current)
 - JSON-LD parser, Readability + LLM fallback, YouTube ingest
 - Ingredient normalization with embedding match
+- Review queue API with revision checks
+- Live service and 100-recipe accuracy gate still open
 
 ### Phase 3 — Hybrid Retrieval
 - Atlas Vector + Search indices, $scoreFusion, cross-encoder reranker
@@ -119,7 +125,7 @@ docker run -d -p 27017:27017 --name mongo mongo:latest
 docker run -d -p 6379:6379 --name redis redis:latest
 
 # Run the development server
-uv run uvicorn src.idunn.main:app --reload
+uv run uvicorn idunn.main:app --reload
 ```
 
 ### API Documentation
@@ -142,15 +148,14 @@ uv run uvicorn src.idunn.main:app --reload
 ## Testing
 
 ```bash
-# Run all tests
+# Run isolated model, API and recipe-import tests (no database or model keys needed)
 uv run pytest
 
-# Run with coverage
-uv run pytest --cov=src/idunn
-
 # Run property-based tests (Hypothesis)
-uv run pytest tests/test_unit_conversions.py -v
+uv run pytest tests/test_inventory.py tests/test_phase1_exit.py -v
 ```
+
+Provider calls and Atlas vector queries are replaced at their boundaries in these tests. A real-server and labeled-recipe evaluation is a separate gate; see [Phase 2 progress](docs/PHASE2_PROGRESS.md).
 
 ## Portfolio Highlights
 

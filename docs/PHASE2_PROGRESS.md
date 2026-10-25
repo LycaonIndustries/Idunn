@@ -1,156 +1,77 @@
-# Phase 2 Progress Summary — Recipe Ingest
+# Phase 2 — Recipe import
 
-**Date**: 2026-05-07  
-**Status**: 🚧 IN PROGRESS
+Updated: 2026-10-07. Status: import and review implementation built; live service and corpus checks still open.
 
----
+## Built
 
-## Completed (Phase 2 Start)
+- URL imports fetch bounded HTML, parse schema.org recipes with `scrape-schema-recipe`, and handle sectioned steps, fractions, durations, serving lists, image objects and source credit.
+- Non-structured blogs use Readability and Claude structured extraction. Pasted recipe text uses the same validated extraction path.
+- YouTube videos use a separate, time-limited yt-dlp/Whisper process before Claude extraction. Playlists and live videos are rejected. Audio is temporary and is removed after success, failure, timeout or cancellation.
+- Exact ingredient names and regional synonyms are matched first. Configured Voyage embeddings feed Atlas vector matching for unresolved names. Low scores and near-tied candidates remain suggestions for review.
+- Every ingredient retains its row number, confirmed ID or suggestion, score and review state. Recipe and review data are stored together. Missing embedding configuration is reported and does not discard a usable recipe.
+- Review endpoints support confirming, changing or ignoring matches and approving uncertain extraction. Revision checks reject stale reviews with HTTP 409. Editing a recipe's ingredients clears old links; changing recipe text clears the old embedding. Editing canonical ingredient names or synonyms clears their old vectors.
+- Recipe create/update timestamps, explicit field clearing, stored-document validation, and database-error responses are fixed. Shared validation now includes recipes and a review-queue index.
+- Atlas search setup and canonical ingredient embedding backfill have an explicit command. They do not run automatically on startup.
+- The full API checks also found a pre-existing pantry bug: finishing an item stored zero but the model rejected it. Zero is now valid for consumed stored items; new items still require a positive quantity.
 
-### 1. Recipe Pydantic Models
-- **`Recipe`** — Complete recipe document with title, ingredients, steps, nutrition
-- **`RecipeCreate`** — Creation payload
-- **`RecipeUpdate`** — Partial update payload
-- **`IngredientItem`** — Ingredient in recipe with quantity, unit, optional flag
-- **`Step`** — Recipe step with step number, instruction, time
-- **`NutritionInfo`** — Per-serving nutrition (calories, protein, carbs, fat)
-- **Enums**: `Region`, `CuisineType`, `Difficulty`
+## API
 
-### 2. Recipe API Routes (FastAPI)
-**Recipes** (`/api/v1/recipes`):
-- `POST /` — Create recipe (201)
-- `GET /` — List recipes with filters (query, region, cuisine_type, tags)
-- `GET /{recipe_id}` — Get single recipe
-- `PATCH /{recipe_id}` — Update recipe
-- `DELETE /{recipe_id}` — Delete recipe
-- `POST /ingest?url=X` — Ingest recipe from URL (202 Accepted)
+| Method | Path | Result |
+|---|---|---|
+| POST | `/api/v1/recipes` | Create a recipe, HTTP 201 |
+| GET | `/api/v1/recipes` | List/filter recipes |
+| GET | `/api/v1/recipes/{id}` | Read a recipe |
+| PATCH | `/api/v1/recipes/{id}` | Edit a recipe, invalidate stale derived data |
+| DELETE | `/api/v1/recipes/{id}` | Delete a recipe |
+| POST | `/api/v1/recipes/ingest?url=...` | Import and store a recipe, HTTP 201 |
+| POST | `/api/v1/recipes/ingest/text` | Import `{ "text": "...", "source_name": "..." }`, HTTP 201 |
+| GET | `/api/v1/recipes/review` | List recipes needing review |
+| POST | `/api/v1/recipes/{id}/review` | Apply decisions at a given revision |
 
-### 3. Recipe JSON Schema (MongoDB Validation)
-- Added `RECIPES_SCHEMA` to `db/schemas.py`
-- Includes validation for all recipe fields
-- Supports nested ingredients and steps arrays
-- Embedding field for vector search
+The URL endpoint now returns **201 after storage**, replacing the old misleading 202 response. It is a request/response operation, not an asynchronous job acknowledgment. Durable Arq dispatch and polling remain a follow-up, particularly before bulk video imports.
 
-### 4. RecipeIngestService Skeleton
-- **`RecipeIngestService`** class with methods:
-  - `ingest_from_url(url)` — Main entry point
-  - `_try_json_ld(url)` — JSON-LD extraction (scrape-schema-recipe)
-  - `_try_blog_scrape(url)` — Blog scraping + LLM fallback
-  - `_try_youtube(url)` — YouTube transcript (yt-dlp + Whisper)
-  - `_normalize_ingredients(ingredients)` — Embedding match against ingredients collection
-  - `_generate_embedding(recipe)` — Generate recipe embedding
-  - `_store_recipe(recipe)` — Store in MongoDB
+Example review payload:
 
-### 5. Dependencies Added
-- `scrape-schema-recipe` — JSON-LD recipe extraction
-- `yt-dlp` — YouTube audio download
-- `faster-whisper` — Local Whisper for transcription
-- `anthropic` — LLM for extraction/repair
-
----
-
-## Remaining (Phase 2 Implementation)
-
-### High Priority
-1. **Implement JSON-LD parsing** (`_try_json_ld`)
-   - Use `scrape_schema_recipe.scrape_url()`
-   - Handle missing fields with LLM repair
-
-2. **Implement blog scraping** (`_try_blog_scrape`)
-   - Fetch HTML with `httpx`
-   - Extract main content with `readability-lxml`
-   - Use Anthropic LLM to structure recipe
-
-3. **Implement YouTube ingest** (`_try_youtube`)
-   - Download audio with `yt-dlp`
-   - Transcribe with `faster-whisper` (local, free)
-   - Extract recipe with LLM
-
-4. **Implement ingredient normalization** (`_normalize_ingredients`)
-   - Generate embedding for each ingredient name
-   - Vector search in `ingredients` collection
-   - Return normalized IDs + confidence scores
-
-5. **Generate recipe embeddings** (`_generate_embedding`)
-   - Combine title + ingredients + steps into text
-   - Use Voyage AI or local BGE-M3
-   - Store in `embedding` field
-
-### Medium Priority
-6. **Add MongoDB Atlas Vector + Search indices** for recipes
-7. **Create manual review queue** for low-confidence ingests
-8. **Add tests for Phase 2**:
-   - Test JSON-LD parsing with sample URLs
-   - Test ingredient normalization accuracy
-   - Test ingest API endpoint
-
-### Exit Criteria (from Design Doc)
-- ✅ Ingest 100 mixed recipes
-- ✅ Sources: Hebbar's Kitchen, NDTV Food, Sanjeev Kapoor blog, Nisha Madhulika YouTube
-- ✅ ≥90% ingredient-match accuracy
-
----
-
-## Tech Stack (Phase 2)
-
-| Layer | Choice | Purpose |
-|-------|--------|---------|
-| JSON-LD Parsing | scrape-schema-recipe | Extract from modern recipe sites |
-| Blog Scraping | httpx + readability-lxml | Extract main content |
-| YouTube | yt-dlp + faster-whisper | Download audio + transcribe |
-| LLM Extraction | Anthropic (Haiku 4.5) | Structure unstructured text |
-| Embeddings | Voyage AI or BGE-M3 | Recipe + ingredient vectors |
-| Vector Search | MongoDB Atlas Vector Search | Semantic recipe retrieval |
-
----
-
-## Decisions Made (Phase 2)
-
-### 1. Why JSON-LD First?
-- **~70% success rate** for modern recipe sites
-- **Zero LLM cost** — deterministic parsing
-- **Fast** — no API calls needed
-
-### 2. Why `faster-whisper` over `openai-whisper`?
-- **Local** — no API costs
-- **Fast** — optimized with CTranslate2
-- **Multilingual** — supports Hindi/Tamil/Telugu
-
-### 3. Why Anthropic Haiku 4.5 for extraction?
-- **Cost-effective** — cheap for high-volume parsing
-- **Structured output** — Pydantic-compatible
-- **Prompt caching** — reduces costs for repeated patterns
-
----
-
-## Next Steps (Phase 2 Continuation)
-
-### Immediate
-1. Implement `_try_json_ld` with `scrape_schema_recipe`
-2. Add sample recipe URLs for testing
-3. Implement `_try_blog_scrape` with `readability-lxml` + Anthropic
-4. Test with Hebbar's Kitchen URL
-
-### After Basic Ingest Works
-5. Implement `_try_youtube` with `yt-dlp` + `faster-whisper`
-6. Implement `_normalize_ingredients` with vector search
-7. Implement `_generate_embedding` with Voyage AI
-8. Create manual review queue for low-confidence ingests
-
-### Testing
-9. Create `test_recipe_api.py` — Test CRUD operations
-10. Create `test_recipe_ingest.py` — Test ingest pipeline
-11. Ingest 100 recipes and verify ≥90% ingredient-match accuracy
-
----
-
-## Git History (Phase 2)
-
-```
-934a65f feat: add Recipe model and API routes (Phase 2 start)
-16884e8 feat: add RecipeIngestService skeleton (Phase 2)
+```json
+{
+  "revision": 0,
+  "decisions": [
+    {"ingredient_index": 0, "ingredient_id": "<canonical ingredient ObjectId>"},
+    {"ingredient_index": 1, "ignore": true}
+  ],
+  "approve_extraction": true
+}
 ```
 
----
+Row numbers start at zero. A partial review keeps remaining uncertain rows in the queue. Ignoring a row does not remove the ingredient from the recipe.
 
-**Phase 2 is in progress. Continuing implementation...**
+## Configuration and run steps
+
+1. Install project dependencies with Python 3.13 (`uv sync --python 3.13`). Configure a development MongoDB database using `.env.example` as the field list.
+2. Set `ANTHROPIC_API_KEY` for blog, pasted-text and video extraction. Structured website recipes do not require it.
+3. Set `VOYAGE_API_KEY` for embeddings. Add canonical ingredients through the ingredient API before judging match accuracy.
+4. On an Atlas cluster that supports vector search, run `uv run python -m idunn.db.recipe_search_indexes --create-indexes`, then wait for the indexes to be ready. Run `uv run python -m idunn.db.recipe_search_indexes --embed-ingredients` to create canonical vectors; this second command calls the paid embedding service. Re-run after changing the ingredient master or embedding model/dimensions.
+5. For videos, use a cached multilingual Whisper model via `WHISPER_MODEL`. `WHISPER_LOCAL_FILES_ONLY=true` prevents an unexpected model download; set it false only when a download is intended.
+6. Start the API with `uv run uvicorn idunn.main:app --reload`. Use `/docs` to import and review recipes.
+
+Input limits are configurable: 2 MB HTML, 60,000 text characters, 30-second website timeout, 30-minute videos, 100 MB audio and a 15-minute video-worker timeout. Unsupported content and fetch errors return 400; invalid extraction returns 422; missing provider setup returns 503; model-service failure returns 502; database failure returns 503.
+
+## Verification
+
+- `pytest -q --tb=short`: **107 passed**. Includes the 26 existing inventory model/property tests, isolated API CRUD checks, real structured-data parsing, provider boundary checks, regional and vector matching, review conflicts, stale-vector invalidation and video timeout cleanup.
+- API tests use an isolated in-memory MongoDB substitute. They do not connect to the configured application database. Atlas search and external providers are mocked at their boundaries.
+- OpenAPI generation passes and includes all six recipe route paths. The Atlas setup command's help path loads successfully.
+- Ruff passes on the changed recipe/config/schema/service modules and the new recipe tests. `git diff --check` passes.
+- A read-only HTTPS fetch of `https://example.com` passed through the actual bounded fetcher, including checked-address connection and TLS hostname handling. This was not a recipe accuracy or model-service test.
+- The test run still reports existing `datetime.utcnow()` deprecation warnings in the older inventory code.
+- The old project `.venv` references a missing interpreter. This session verified with Python 3.13.5 in `C:\Users\aesir\AppData\Local\Temp\opencode\idunn-phase2-venv`; the old environment was left intact.
+
+## Open gates
+
+- A read-only setup check found no configured Anthropic key, no configured Voyage key, and no reachable configured MongoDB server. No paid model calls or application-database writes were made during this build.
+- Real MongoDB validator and Atlas index checks are pending. Mock tests do not verify those server features.
+- YouTube/Whisper is wired and its surrounding flow is tested with a transcript substitute; a real multilingual audio run is pending.
+- The design's **100 mixed recipes with at least 90% ingredient-match accuracy** has not been run. It needs approved live-provider access, a populated canonical ingredient master, and human-labeled expected matches. The old May note incorrectly used checked boxes for these exit targets; they were not verified results.
+- A frontend review screen, durable import jobs and the Phase 3 retrieval/meal-planning work remain later milestones.
+
+Build plan: [Recipe import build plan](recipe-import-build-plan.md).

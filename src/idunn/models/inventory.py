@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, UTC
 from enum import Enum
 from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 class Location(str, Enum):
@@ -150,9 +150,16 @@ class Item(ItemBase):
     model_config = ConfigDict(from_attributes=True)
 
     id: str = Field(..., alias="_id")
+    quantity: float = Field(..., ge=0, description="Remaining quantity")
     added_at: datetime
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     consumed: bool = Field(False, description="Marked as consumed/discarded")
+
+    @model_validator(mode="after")
+    def zero_requires_consumed(self) -> Item:
+        if self.quantity == 0 and not self.consumed:
+            raise ValueError("An item with zero quantity must be marked consumed")
+        return self
 
     def is_expiring_soon(self, days: int = 3) -> bool:
         """Check if item expires within given days."""

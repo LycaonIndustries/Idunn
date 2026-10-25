@@ -128,9 +128,13 @@ async def update_ingredient(
 
     update_dict["updated_at"] = str(int(__import__("time").time()))
 
+    changes = {"$set": update_dict}
+    if {"name", "synonyms"} & update_dict.keys():
+        changes["$unset"] = {"embedding": "", "embedding_model": "", "embedding_text": ""}
+
     result = await collection.find_one_and_update(
         {"_id": obj_id},
-        {"$set": update_dict},
+        changes,
         return_document=True,
     )
 
@@ -170,6 +174,7 @@ async def add_synonym(
         {
             "$push": {"synonyms": synonym.model_dump()},
             "$set": {"updated_at": now},
+            "$unset": {"embedding": "", "embedding_model": "", "embedding_text": ""},
         },
         return_document=True,
     )
