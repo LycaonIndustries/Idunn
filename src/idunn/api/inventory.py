@@ -89,10 +89,17 @@ async def list_items(
         three_days = datetime.utcnow() + timedelta(days=3)
         filter_query["expiry_date"] = {"$lte": three_days, "$gte": datetime.utcnow()}
 
-    # FEFO ordering: items with expiry first (ascending), then items without expiry
-    cursor = collection.find(filter_query).sort(
-        [("expiry_date", 1), ("added_at", -1)]
-    ).skip(skip).limit(limit)
+    # FEFO ordering: items with expiry first (ascending), then items without expiry.
+    # A plain ascending sort puts missing/null expiry_date first, so normalise it
+    # to a sentinel that sorts after every real expiry.
+    pipeline = [
+        {"$match": filter_query},
+        {"$addFields": {"_fefo": {"$ifNull": ["$expiry_date", datetime.max]}}},
+        {"$sort": {"_fefo": 1, "added_at": -1}},
+        {"$skip": skip},
+        {"$limit": limit},
+    ]
+    cursor = collection.aggregate(pipeline)
 
     items = []
     async for doc in cursor:
