@@ -23,8 +23,11 @@ Updated: 2026-10-07. Status: import and review implementation built; live servic
 | GET | `/api/v1/recipes/{id}` | Read a recipe |
 | PATCH | `/api/v1/recipes/{id}` | Edit a recipe, invalidate stale derived data |
 | DELETE | `/api/v1/recipes/{id}` | Delete a recipe |
-| POST | `/api/v1/recipes/ingest?url=...` | Import and store a recipe, HTTP 201 |
+| POST | `/api/v1/recipes/ingest?url=...` | Import and store a recipe from URL, HTTP 201 |
 | POST | `/api/v1/recipes/ingest/text` | Import `{ "text": "...", "source_name": "..." }`, HTTP 201 |
+| POST | `/api/v1/recipes/ingest/image` | Import cookbook photo or screenshot via multimodal vision, HTTP 201 |
+| POST | `/api/v1/recipes/ingest/audio` | Import spoken voice note or audio file via ASR/Gemini, HTTP 201 |
+| POST | `/api/v1/recipes/ingest/video` | Import silent video reel by sampling 1 fps keyframes via ffmpeg + vision, HTTP 201 |
 | GET | `/api/v1/recipes/review` | List recipes needing review |
 | POST | `/api/v1/recipes/{id}/review` | Apply decisions at a given revision |
 
@@ -58,7 +61,8 @@ Input limits are configurable: 2 MB HTML, 60,000 text characters, 30-second webs
 
 ## Verification
 
-- `pytest -q --tb=short`: **107 passed**. Includes the 26 existing inventory model/property tests, isolated API CRUD checks, real structured-data parsing, provider boundary checks, regional and vector matching, review conflicts, stale-vector invalidation and video timeout cleanup.
+- `pytest -q`: **124 passed**. Includes the 26 existing inventory model/property tests, isolated API CRUD checks, real structured-data parsing, provider boundary checks, regional and vector matching, review conflicts, stale-vector invalidation, video timeout cleanup, Gemini multimodal extraction, direct image upload, direct audio voice note ingestion, and silent video reel keyframe sampling.
+- Settings resilience verified with `extra="ignore"` allowing arbitrary environment variables and BYOK Gemini configuration.
 - API tests use an isolated in-memory MongoDB substitute. They do not connect to the configured application database. Atlas search and external providers are mocked at their boundaries.
 - OpenAPI generation passes and includes all six recipe route paths. The Atlas setup command's help path loads successfully.
 - Ruff passes on the changed recipe/config/schema/service modules and the new recipe tests. `git diff --check` passes.

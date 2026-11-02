@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import ValidationError
 from pymongo import ReturnDocument
@@ -117,6 +117,96 @@ async def ingest_recipe(
 @router.post("/ingest/text", response_model=IngestResult, status_code=201)
 async def ingest_recipe_text(payload: RecipeTextInput, service: IngestService):
     return await service.ingest_from_text(payload.text, payload.source_name)
+
+
+@router.post("/ingest/image", response_model=IngestResult, status_code=201)
+async def ingest_recipe_image(
+    service: IngestService,
+    file: UploadFile = File(...),
+    source_name: str = Form("Image Upload"),
+):
+    """Extract and import a recipe from an uploaded image or screenshot."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=400,
+            detail="File must be an image (JPEG, PNG, or WebP).",
+        )
+    content = await file.read()
+    if not content:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded image is empty.",
+        )
+    if len(content) > 10_000_000:
+        raise HTTPException(
+            status_code=413,
+            detail="Image size exceeds the 10 MB limit.",
+        )
+    return await service.ingest_from_image(content, file.content_type, source_name)
+
+
+@router.post("/ingest/audio", response_model=IngestResult, status_code=201)
+async def ingest_recipe_audio(
+    service: IngestService,
+    file: UploadFile = File(...),
+    source_name: str = Form("Voice Note"),
+):
+    """Extract and import a recipe from an uploaded voice recording or audio file."""
+    content_type = file.content_type or ""
+    filename = (file.filename or "").lower()
+    is_audio = (
+        content_type.startswith("audio/")
+        or any(filename.endswith(ext) for ext in (".mp3", ".m4a", ".wav", ".ogg", ".webm"))
+    )
+    if not is_audio:
+        raise HTTPException(
+            status_code=400,
+            detail="File must be an audio recording (MP3, M4A, WAV, OGG, or WebM).",
+        )
+    content = await file.read()
+    if not content:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded audio is empty.",
+        )
+    if len(content) > 50_000_000:
+        raise HTTPException(
+            status_code=413,
+            detail="Audio size exceeds the 50 MB limit.",
+        )
+    return await service.ingest_from_audio(content, content_type or "audio/mp3", source_name)
+
+
+@router.post("/ingest/video", response_model=IngestResult, status_code=201)
+async def ingest_recipe_video(
+    service: IngestService,
+    file: UploadFile = File(...),
+    source_name: str = Form("Video Reel"),
+):
+    """Extract and import a recipe from a silent video reel by sampling frames."""
+    content_type = file.content_type or ""
+    filename = (file.filename or "").lower()
+    is_video = (
+        content_type.startswith("video/")
+        or any(filename.endswith(ext) for ext in (".mp4", ".mov", ".webm", ".mkv"))
+    )
+    if not is_video:
+        raise HTTPException(
+            status_code=400,
+            detail="File must be a video file (MP4, MOV, WebM, or MKV).",
+        )
+    content = await file.read()
+    if not content:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded video is empty.",
+        )
+    if len(content) > 100_000_000:
+        raise HTTPException(
+            status_code=413,
+            detail="Video size exceeds the 100 MB limit.",
+        )
+    return await service.ingest_from_video(content, content_type or "video/mp4", source_name)
 
 
 @router.get("/{recipe_id}", response_model=Recipe)

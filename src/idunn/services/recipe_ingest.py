@@ -15,9 +15,9 @@ if TYPE_CHECKING:
 from ..config import settings
 from ..db import COLLECTION_RECIPES
 from ..models.recipe import IngredientMatch, Recipe
-from .ingest_errors import ExtractionError
+from .ingest_errors import ExtractionError, ProviderNotConfiguredError
 from .ingredient_matching import IngredientMatcher
-from .recipe_providers import ExtractedRecipe, VoyageEmbedder
+from .recipe_providers import ExtractedRecipe, GeminiRecipeExtractor, VoyageEmbedder
 from .recipe_sources import RecipeSourceReader
 
 
@@ -53,6 +53,77 @@ class RecipeIngestService:
     async def ingest_from_text(self, text: str, source_name: str) -> IngestResult:
         extracted, source = await self.reader.from_text(text, source_name)
         return await self.store(extracted, source)
+
+    async def ingest_from_image(self, image_bytes: bytes, mime_type: str, source_name: str) -> IngestResult:
+        if not self.config.gemini_api_key:
+            raise ProviderNotConfiguredError("Set GEMINI_API_KEY to extract recipes from images.")
+        extractor = GeminiRecipeExtractor(self.config)
+        extracted = await extractor.extract_image(image_bytes, mime_type)
+        return await self.store(extracted, source_name)
+
+    async def ingest_from_audio(
+        self, audio_bytes: bytes, mime_type: str, source_name: str
+    ) -> IngestResult:
+        if self.config.gemini_api_key:
+            extractor = GeminiRecipeExtractor(self.config)
+            extracted = await extractor.extract_audio(audio_bytes, mime_type)
+            return await self.store(extracted, source_name)
+
+        if not self.config.anthropic_api_key:
+            raise ProviderNotConfiguredError(
+                "Set GEMINI_API_KEY or ANTHROPIC_API_KEY to extract recipes from audio."
+            )
+
+        import asyncio
+        import tempfile
+        from pathlib import Path
+
+        suffix = ".mp3"
+        if "wav" in mime_type:
+            suffix = ".wav"
+        elif "m4a" in mime_type:
+            suffix = ".m4a"
+        elif "ogg" in mime_type:
+            suffix = ".ogg"
+
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+            tmp.write(audio_bytes)
+
+        try:
+            from faster_whisper import WhisperModel
+
+            def _transcribe() -> str:
+                whisper = WhisperModel(
+                    self.config.whisper_model,
+                    device="cpu",
+                    compute_type="int8",
+                    local_files_only=self.config.whisper_local_files_only,
+                )
+                segments, _ = whisper.transcribe(str(tmp_path), vad_filter=True)
+                return "\n".join(seg.text.strip() for seg in segments)
+
+            text = await asyncio.to_thread(_transcribe)
+            if not text.strip():
+                raise ExtractionError("No speech was found in this audio file.")
+            extracted = await self.reader.extractor.extract(text)
+            return await self.store(extracted, source_name)
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
+    async def ingest_from_video(
+        self, video_bytes: bytes, mime_type: str, source_name: str
+    ) -> IngestResult:
+        if not self.config.gemini_api_key:
+            raise ProviderNotConfiguredError(
+                "Set GEMINI_API_KEY to extract recipes from silent video frames."
+            )
+        from .video_frames import sample_video_keyframes
+
+        keyframes = await sample_video_keyframes(video_bytes, max_frames=15)
+        extractor = GeminiRecipeExtractor(self.config)
+        extracted = await extractor.extract_video_frames(keyframes)
+        return await self.store(extracted, source_name)
 
     async def store(self, extracted: ExtractedRecipe, source: str) -> IngestResult:
         recipe = extracted.recipe
