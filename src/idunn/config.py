@@ -18,6 +18,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
+        extra="ignore",
     )
 
     # App
@@ -42,6 +43,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     anthropic_model_extract: str = "claude-haiku-4-5-20251001"
     anthropic_model_rank: str = "claude-sonnet-4-5"
+
+    # LLM (BYOK Providers)
+    gemini_api_key: str | None = None
+    gemini_model: str = "gemini-2.5-flash"
+    openai_api_key: str | None = None
 
     # Embeddings
     voyage_api_key: str | None = None
