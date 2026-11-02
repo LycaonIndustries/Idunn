@@ -177,6 +177,38 @@ async def ingest_recipe_audio(
     return await service.ingest_from_audio(content, content_type or "audio/mp3", source_name)
 
 
+@router.post("/ingest/video", response_model=IngestResult, status_code=201)
+async def ingest_recipe_video(
+    service: IngestService,
+    file: UploadFile = File(...),
+    source_name: str = Form("Video Reel"),
+):
+    """Extract and import a recipe from a silent video reel by sampling frames."""
+    content_type = file.content_type or ""
+    filename = (file.filename or "").lower()
+    is_video = (
+        content_type.startswith("video/")
+        or any(filename.endswith(ext) for ext in (".mp4", ".mov", ".webm", ".mkv"))
+    )
+    if not is_video:
+        raise HTTPException(
+            status_code=400,
+            detail="File must be a video file (MP4, MOV, WebM, or MKV).",
+        )
+    content = await file.read()
+    if not content:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded video is empty.",
+        )
+    if len(content) > 100_000_000:
+        raise HTTPException(
+            status_code=413,
+            detail="Video size exceeds the 100 MB limit.",
+        )
+    return await service.ingest_from_video(content, content_type or "video/mp4", source_name)
+
+
 @router.get("/{recipe_id}", response_model=Recipe)
 async def get_recipe(recipe_id: str, db: Database):
     doc = await db[COLLECTION_RECIPES].find_one({"_id": object_id(recipe_id)})

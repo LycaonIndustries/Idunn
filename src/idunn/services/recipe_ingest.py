@@ -111,6 +111,20 @@ class RecipeIngestService:
         finally:
             tmp_path.unlink(missing_ok=True)
 
+    async def ingest_from_video(
+        self, video_bytes: bytes, mime_type: str, source_name: str
+    ) -> IngestResult:
+        if not self.config.gemini_api_key:
+            raise ProviderNotConfiguredError(
+                "Set GEMINI_API_KEY to extract recipes from silent video frames."
+            )
+        from .video_frames import sample_video_keyframes
+
+        keyframes = await sample_video_keyframes(video_bytes, max_frames=15)
+        extractor = GeminiRecipeExtractor(self.config)
+        extracted = await extractor.extract_video_frames(keyframes)
+        return await self.store(extracted, source_name)
+
     async def store(self, extracted: ExtractedRecipe, source: str) -> IngestResult:
         recipe = extracted.recipe
         if not recipe.title.strip() or not recipe.ingredients or not recipe.steps:
