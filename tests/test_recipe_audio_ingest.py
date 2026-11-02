@@ -2,8 +2,6 @@
 
 from unittest.mock import AsyncMock
 
-import pytest
-
 from idunn.services.recipe_ingest import IngestResult
 
 

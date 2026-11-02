@@ -145,13 +145,15 @@ class RecipeTextExtractor:
         self.config = config
 
     async def extract(self, text: str) -> ExtractedRecipe:
+        if self.config.anthropic_api_key:
+            return await self._extract_anthropic(text)
         if self.config.gemini_api_key:
             return await GeminiRecipeExtractor(self.config).extract_text(text)
+        raise ProviderNotConfiguredError(
+            "Set GEMINI_API_KEY or ANTHROPIC_API_KEY to import text, blogs or videos."
+        )
 
-        if not self.config.anthropic_api_key:
-            raise ProviderNotConfiguredError(
-                "Set GEMINI_API_KEY or ANTHROPIC_API_KEY to import text, blogs or videos."
-            )
+    async def _extract_anthropic(self, text: str) -> ExtractedRecipe:
         if not text.strip():
             raise ExtractionError("The source has no recipe text.")
         if len(text) > self.config.source_max_text_chars:

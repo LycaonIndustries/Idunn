@@ -47,11 +47,10 @@ def extract_frames_sync(video_path: Path, output_dir: Path, fps: int = 1) -> lis
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=60, check=False)
         if result.returncode != 0:
-            raise ExtractionError(
-                f"ffmpeg video decoding failed: {result.stderr.decode('utf-8', errors='ignore')[:300]}"
-            )
+            err = result.stderr.decode("utf-8", errors="ignore")[:300]
+            raise ExtractionError(f"ffmpeg video decoding failed: {err}")
     except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
-        raise ExtractionError("ffmpeg frame extraction timed out or ffmpeg is not available.") from exc
+        raise ExtractionError("ffmpeg frame extraction timed out or is unavailable.") from exc
 
     frames = sorted(output_dir.glob("frame_*.jpg"))
     if not frames:

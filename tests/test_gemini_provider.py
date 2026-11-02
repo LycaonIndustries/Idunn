@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from idunn.config import Settings
-from idunn.services.ingest_errors import ExtractionError, ProviderError, ProviderNotConfiguredError
+from idunn.services.ingest_errors import ProviderError, ProviderNotConfiguredError
 from idunn.services.recipe_providers import GeminiRecipeExtractor, RecipeTextExtractor
 
 
@@ -23,22 +23,13 @@ async def test_gemini_extract_text_success() -> None:
     config = Settings(gemini_api_key="fake-key", gemini_model="gemini-2.5-flash")
     extractor = GeminiRecipeExtractor(config)
 
+    recipe_json = (
+        '{"recipe": {"title": "Dal Tadka", "prep_time": 10, "cook_time": 20, '
+        '"servings": 4, "ingredients": [{"name": "toor dal", "quantity": 1, "unit": "katori"}], '
+        '"steps": [{"step_number": 1, "instruction": "Boil dal"}]}, "confidence": 0.95}'
+    )
     fake_response_data = {
-        "candidates": [
-            {
-                "content": {
-                    "parts": [
-                        {
-                            "text": (
-                                '{"recipe": {"title": "Dal Tadka", "prep_time": 10, "cook_time": 20, '
-                                '"servings": 4, "ingredients": [{"name": "toor dal", "quantity": 1, "unit": "katori"}], '
-                                '"steps": [{"step_number": 1, "instruction": "Boil dal"}]}, "confidence": 0.95}'
-                            )
-                        }
-                    ]
-                }
-            }
-        ]
+        "candidates": [{"content": {"parts": [{"text": recipe_json}]}}]
     }
 
     mock_response = AsyncMock(spec=httpx.Response)
@@ -58,22 +49,13 @@ async def test_gemini_extract_image_success() -> None:
     config = Settings(gemini_api_key="fake-key", gemini_model="gemini-2.5-flash")
     extractor = GeminiRecipeExtractor(config)
 
+    recipe_json = (
+        '{"recipe": {"title": "Palak Paneer", "prep_time": 15, "cook_time": 25, '
+        '"servings": 3, "ingredients": [{"name": "paneer", "quantity": 200, "unit": "g"}], '
+        '"steps": [{"step_number": 1, "instruction": "Blanch palak"}]}, "confidence": 0.92}'
+    )
     fake_response_data = {
-        "candidates": [
-            {
-                "content": {
-                    "parts": [
-                        {
-                            "text": (
-                                '{"recipe": {"title": "Palak Paneer", "prep_time": 15, "cook_time": 25, '
-                                '"servings": 3, "ingredients": [{"name": "paneer", "quantity": 200, "unit": "g"}], '
-                                '"steps": [{"step_number": 1, "instruction": "Blanch palak"}]}, "confidence": 0.92}'
-                            )
-                        }
-                    ]
-                }
-            }
-        ]
+        "candidates": [{"content": {"parts": [{"text": recipe_json}]}}]
     }
 
     mock_response = AsyncMock(spec=httpx.Response)
@@ -95,9 +77,10 @@ async def test_gemini_api_error_handling() -> None:
     mock_response.status_code = 429
     mock_response.text = "Quota exceeded"
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=mock_response)):
-        with pytest.raises(ProviderError):
-            await extractor.extract_text("some text")
+    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=mock_response)), pytest.raises(
+        ProviderError
+    ):
+        await extractor.extract_text("some text")
 
 
 @pytest.mark.asyncio
@@ -105,22 +88,13 @@ async def test_recipe_text_extractor_prefers_gemini_when_set() -> None:
     config = Settings(gemini_api_key="fake-gemini-key", anthropic_api_key=None)
     extractor = RecipeTextExtractor(config)
 
+    recipe_json = (
+        '{"recipe": {"title": "Khichdi", "prep_time": 5, "cook_time": 15, '
+        '"servings": 2, "ingredients": [{"name": "rice", "quantity": 1, "unit": "cup"}], '
+        '"steps": [{"step_number": 1, "instruction": "Pressure cook"}]}, "confidence": 0.9}'
+    )
     fake_response_data = {
-        "candidates": [
-            {
-                "content": {
-                    "parts": [
-                        {
-                            "text": (
-                                '{"recipe": {"title": "Khichdi", "prep_time": 5, "cook_time": 15, '
-                                '"servings": 2, "ingredients": [{"name": "rice", "quantity": 1, "unit": "cup"}], '
-                                '"steps": [{"step_number": 1, "instruction": "Pressure cook"}]}, "confidence": 0.9}'
-                            )
-                        }
-                    ]
-                }
-            }
-        ]
+        "candidates": [{"content": {"parts": [{"text": recipe_json}]}}]
     }
 
     mock_response = AsyncMock(spec=httpx.Response)

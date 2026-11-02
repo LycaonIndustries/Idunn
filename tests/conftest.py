@@ -16,7 +16,11 @@ from idunn.services.recipe_ingest import RecipeIngestService
 @pytest.fixture
 def config():
     return Settings(
-        _env_file=None, anthropic_api_key=None, voyage_api_key=None,
+        _env_file=None,
+        anthropic_api_key=None,
+        gemini_api_key=None,
+        openai_api_key=None,
+        voyage_api_key=None,
         embedding_dimensions=3,
     )
 
