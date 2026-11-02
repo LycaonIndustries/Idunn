@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from bson import ObjectId
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from pydantic import ValidationError
 from pymongo import ReturnDocument
@@ -117,6 +117,32 @@ async def ingest_recipe(
 @router.post("/ingest/text", response_model=IngestResult, status_code=201)
 async def ingest_recipe_text(payload: RecipeTextInput, service: IngestService):
     return await service.ingest_from_text(payload.text, payload.source_name)
+
+
+@router.post("/ingest/image", response_model=IngestResult, status_code=201)
+async def ingest_recipe_image(
+    service: IngestService,
+    file: UploadFile = File(...),
+    source_name: str = Form("Image Upload"),
+):
+    """Extract and import a recipe from an uploaded image or screenshot."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=400,
+            detail="File must be an image (JPEG, PNG, or WebP).",
+        )
+    content = await file.read()
+    if not content:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded image is empty.",
+        )
+    if len(content) > 10_000_000:
+        raise HTTPException(
+            status_code=413,
+            detail="Image size exceeds the 10 MB limit.",
+        )
+    return await service.ingest_from_image(content, file.content_type, source_name)
 
 
 @router.get("/{recipe_id}", response_model=Recipe)
