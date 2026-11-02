@@ -69,6 +69,19 @@ class GeminiRecipeExtractor:
         ]
         return await self._call_gemini(parts)
 
+    async def extract_audio(self, audio_bytes: bytes, mime_type: str = "audio/mp3") -> ExtractedRecipe:
+        if not self.configured:
+            raise ProviderNotConfiguredError("Set GEMINI_API_KEY to use Gemini extraction.")
+        if not audio_bytes:
+            raise ExtractionError("Audio data is empty.")
+
+        b64_data = base64.b64encode(audio_bytes).decode("ascii")
+        parts: list[dict[str, Any]] = [
+            {"text": f"{SYSTEM_EXTRACTION_PROMPT}\n\nExtract the recipe spoken in this audio recording or voice note:"},
+            {"inline_data": {"mime_type": mime_type, "data": b64_data}},
+        ]
+        return await self._call_gemini(parts)
+
     async def _call_gemini(self, parts: list[dict[str, Any]]) -> ExtractedRecipe:
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"

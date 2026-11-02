@@ -145,6 +145,38 @@ async def ingest_recipe_image(
     return await service.ingest_from_image(content, file.content_type, source_name)
 
 
+@router.post("/ingest/audio", response_model=IngestResult, status_code=201)
+async def ingest_recipe_audio(
+    service: IngestService,
+    file: UploadFile = File(...),
+    source_name: str = Form("Voice Note"),
+):
+    """Extract and import a recipe from an uploaded voice recording or audio file."""
+    content_type = file.content_type or ""
+    filename = (file.filename or "").lower()
+    is_audio = (
+        content_type.startswith("audio/")
+        or any(filename.endswith(ext) for ext in (".mp3", ".m4a", ".wav", ".ogg", ".webm"))
+    )
+    if not is_audio:
+        raise HTTPException(
+            status_code=400,
+            detail="File must be an audio recording (MP3, M4A, WAV, OGG, or WebM).",
+        )
+    content = await file.read()
+    if not content:
+        raise HTTPException(
+            status_code=400,
+            detail="Uploaded audio is empty.",
+        )
+    if len(content) > 50_000_000:
+        raise HTTPException(
+            status_code=413,
+            detail="Audio size exceeds the 50 MB limit.",
+        )
+    return await service.ingest_from_audio(content, content_type or "audio/mp3", source_name)
+
+
 @router.get("/{recipe_id}", response_model=Recipe)
 async def get_recipe(recipe_id: str, db: Database):
     doc = await db[COLLECTION_RECIPES].find_one({"_id": object_id(recipe_id)})
