@@ -3,6 +3,7 @@ name = "idunn"
 version = "0.1.0"
 description = "Kitchen Inventory & Meal Planning - Indian household kitchen OS"
 readme = "README.md"
+license = { text = "LSAL-AI-1.0" }
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.100.0",
