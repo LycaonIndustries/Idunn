@@ -12,6 +12,8 @@ import { RecipeVault } from './components/RecipeVault'
 import { RecipeDetailPage } from './components/RecipeDetailPage'
 import { PantryView } from './components/PantryView'
 import { SettingsView } from './components/SettingsView'
+import { CookAIView } from './components/CookAIView'
+import { ShoppingListView } from './components/ShoppingListView'
 
 /**
  * Main application container with tab navigation and state coordination.
@@ -20,7 +22,7 @@ import { SettingsView } from './components/SettingsView'
  */
 export function App() {
   // Track active navigation tab. Defaults to 'capture' for fast recipe imports.
-  const [activeTab, setActiveTab] = useState<'capture' | 'vault' | 'pantry' | 'settings'>('capture')
+  const [activeTab, setActiveTab] = useState<'capture' | 'vault' | 'pantry' | 'cook-ai' | 'shopping' | 'settings'>('capture')
 
   // Hold currently viewed recipe for dedicated full-page inspection.
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
@@ -77,7 +79,7 @@ export function App() {
 
   // Reset selected recipe detail view when switching main navigation tabs.
   // This prevents the user from remaining trapped in a detail view on unrelated tabs.
-  const handleTabChange = (tab: 'capture' | 'vault' | 'pantry' | 'settings') => {
+  const handleTabChange = (tab: 'capture' | 'vault' | 'pantry' | 'cook-ai' | 'shopping' | 'settings') => {
     setSelectedRecipe(null)
     setActiveTab(tab)
   }
@@ -168,6 +170,10 @@ export function App() {
             onItemDeleted={handleItemDeleted}
           />
         )}
+
+        {activeTab === 'cook-ai' && <CookAIView />}
+
+        {activeTab === 'shopping' && <ShoppingListView />}
 
         {activeTab === 'settings' && <SettingsView onSettingsUpdated={loadSettings} />}
       </main>

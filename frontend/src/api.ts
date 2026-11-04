@@ -7,6 +7,9 @@ import type {
   DeductionReport,
   InventoryCreate,
   InventoryItem,
+  PantryMatchResult,
+  PantryToPlateRecipe,
+  PantryToPlateRequest,
   Receipt,
   ReceiptConfirmPayload,
   ReceiptConfirmResponse,
@@ -15,6 +18,7 @@ import type {
   ShoppingListItem,
   ShoppingListItemCreate,
   ShoppingListItemUpdate,
+  SubstitutionSuggestion,
   UpdateSettingsPayload,
 } from './types'
 
@@ -520,6 +524,52 @@ export async function deleteShoppingItem(itemId: string): Promise<void> {
 export async function clearPurchasedShoppingItems(): Promise<{ deleted_count: number }> {
   const res = await fetch(`${BASE_URL}/api/v1/shopping-list/clear-purchased`, {
     method: 'POST',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Retrieve ranked vault recipes by pantry coverage and FEFO urgency.
+ */
+export async function fetchWhatCanICook(readyOnly = false): Promise<PantryMatchResult[]> {
+  const res = await fetch(`${BASE_URL}/api/v1/cook-ai/what-can-i-cook?ready_only=${readyOnly}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Retrieve culinary substitutions for a missing ingredient.
+ */
+export async function fetchSubstitutions(ingredient: string): Promise<SubstitutionSuggestion[]> {
+  const res = await fetch(`${BASE_URL}/api/v1/cook-ai/substitutions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ingredient }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * User-triggered synthesis of a bespoke recipe from pantry ingredients.
+ */
+export async function generatePantryRecipe(
+  request: PantryToPlateRequest,
+): Promise<PantryToPlateRecipe> {
+  const res = await fetch(`${BASE_URL}/api/v1/cook-ai/pantry-to-plate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
