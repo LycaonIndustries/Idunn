@@ -28,6 +28,8 @@ def normalized_name(name: str) -> str:
     Returns:
         The normalized, lowercase, whitespace-collapsed name string.
     """
+    # Users enter ingredient names with different casing, accents, and spacing.
+    # Normalize to lowercase NFKC so that string comparisons do not fail because of formatting.
     return " ".join(unicodedata.normalize("NFKC", name).casefold().split())
 
 
@@ -51,6 +53,7 @@ class IngredientMatcher:
             embedder: Embedding client for semantic vector similarity.
             config: Application runtime settings.
         """
+        # Store collection and embedder handles for database operations.
         self.collection = db[COLLECTION_INGREDIENTS]
         self.embedder = embedder
         self.config = config
@@ -72,6 +75,9 @@ class IngredientMatcher:
         matches = []
         unresolved = []
         warnings = []
+
+        # Try exact matching first to avoid unnecessary vector search costs and latency.
+        # Check canonical names and regional synonyms so local Indian terms resolve immediately.
         for index, item in enumerate(recipe.ingredients):
             name = normalized_name(item.name)
             pattern = "^" + re.escape(name).replace(r"\ ", r"\s+") + "$"
@@ -84,6 +90,10 @@ class IngredientMatcher:
                 }
             )
             candidates = []
+
+            # An ingredient name can match multiple records if synonyms overlap across regions.
+            # Filter by the recipe region when specified so that dialect-specific ingredients
+            # resolve correctly.
             async for doc in cursor:
                 canonical = normalized_name(doc["name"]) == name
                 synonym = any(
@@ -95,6 +105,9 @@ class IngredientMatcher:
                     candidates.append(str(doc["_id"]))
                 if len(candidates) > 1:
                     break
+
+            # Confirm matching when exactly one ingredient candidate exists.
+            # If multiple or zero candidates exist, mark for manual review or vector search.
             if len(candidates) == 1:
                 matches.append(
                     IngredientMatch(
@@ -111,6 +124,10 @@ class IngredientMatcher:
                     unresolved.append(index)
                 else:
                     warnings.append(f"Ingredient {index + 1} has more than one exact match.")
+
+        # Some ingredients use non-standard spelling or brand names that fail exact matching.
+        # Use semantic vector search to find the closest database match for manual or automated
+        # confirmation.
         if unresolved and self.embedder.configured:
             vectors = await self.embedder.embed(
                 [recipe.ingredients[i].name for i in unresolved], input_type="query"
@@ -133,8 +150,12 @@ class IngredientMatcher:
                         ]
                     ).to_list(length=2)
                 except OperationFailure as exc:
-                    # Only missing/unsupported search indexes degrade to manual review.
-                    # Auth failures and unrelated database failures must reach the caller.
+                    # The database can operate without vector search indexes in lightweight or
+                    # offline environments.
+                    # Catch index errors so the application continues to run and routes
+                    # unmatched items to manual review.
+                    # Re-raise connection and authentication errors because they require
+                    # administrative action.
                     if exc.code not in {26, 27, 31082, 40324, 6047401}:
                         raise
                     warnings.append(
@@ -143,6 +164,11 @@ class IngredientMatcher:
                     break
                 if not rows:
                     continue
+
+                # A high similarity score alone does not guarantee a correct match when two
+                # ingredients are similar.
+                # Require a minimum score margin between the top two candidates to prevent
+                # false positive matches.
                 score = float(rows[0]["score"])
                 margin = score - float(rows[1]["score"]) if len(rows) > 1 else score
                 confirmed = (

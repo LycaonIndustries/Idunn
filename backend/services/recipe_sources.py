@@ -56,6 +56,8 @@ def validate_source_url(url: str) -> httpx.URL:
     Raises:
         SourceError: If the URL scheme, port, userinfo, or length is invalid.
     """
+    # Restrict schemes to HTTP and HTTPS on standard ports 80/443 without userinfo.
+    # This prevents Server-Side Request Forgery (SSRF) against internal administrative services.
     try:
         parsed = httpx.URL(url)
         if (
@@ -84,6 +86,9 @@ async def public_address(host: str, port: int) -> str:
     Raises:
         SourceError: If the host resolves to a private IP or cannot be found.
     """
+    # Attackers frequently supply hostnames that point to 127.0.0.1 or cloud metadata IP
+    # 169.254.169.254.
+    # Resolve DNS and verify that all returned addresses are globally routable public IPs.
     try:
         addresses = await asyncio.to_thread(socket.getaddrinfo, host, port, type=socket.SOCK_STREAM)
         ips = [item[4][0] for item in addresses]
@@ -118,6 +123,8 @@ class PageFetcher:
             SourceError: If the page exceeds limits, times out, or fails HTTP.
         """
         current = validate_source_url(url)
+
+        # Enforce execution timeout so hanging remote servers do not exhaust application workers.
         try:
             async with asyncio.timeout(self.config.source_timeout_seconds):
                 async with httpx.AsyncClient(
@@ -125,12 +132,17 @@ class PageFetcher:
                     follow_redirects=False,
                     trust_env=False,
                 ) as client:
+                    # Bound redirect count to 6 to prevent redirect loops and infinite recursion.
                     for _ in range(6):
                         address = await public_address(
                             current.host,
                             current.port or (443 if current.scheme == "https" else 80),
                         )
-                        # Connect to the checked address, preserving Host and TLS SNI.
+
+                        # Pin connection directly to checked IP while preserving Host header
+                        # and TLS SNI.
+                        # This prevents DNS rebinding attacks between initial check and HTTP
+                        # socket connection.
                         async with client.stream(
                             "GET",
                             current.copy_with(host=address),
@@ -149,11 +161,17 @@ class PageFetcher:
                                 current = validate_source_url(urljoin(str(current), location))
                                 continue
                             response.raise_for_status()
+
+                            # Require text/html content types so binary downloads (PDFs, ISOs)
+                            # abort immediately.
                             content_type = response.headers.get("content-type", "").lower()
                             if not any(
                                 t in content_type for t in ("text/html", "application/xhtml")
                             ):
                                 raise SourceError("The URL did not return an HTML recipe page.")
+
+                            # Read response in streaming chunks to terminate large payloads
+                            # before memory exhaustion.
                             chunks = bytearray()
                             async for chunk in response.aiter_bytes():
                                 chunks.extend(chunk)
@@ -179,6 +197,7 @@ def clean_text(value: str) -> str:
     Returns:
         Stripped, whitespace-collapsed plain text string.
     """
+    # Strip HTML tags and collapse whitespace so clean text feeds into parsers and models.
     return BeautifulSoup(value, "html.parser").get_text(" ", strip=True)
 
 
@@ -193,9 +212,14 @@ def parse_ingredient(line: str) -> IngredientItem:
     """
     original = clean_text(line)
     value = original
+
+    # Convert Unicode fraction glyphs to ASCII fractions so string regex parsers can evaluate
+    # them.
     fractions = {"½": "1/2", "¼": "1/4", "¾": "3/4", "⅓": "1/3", "⅔": "2/3"}
     for glyph, fraction in fractions.items():
         value = value.replace(glyph, f" {fraction}")
+
+    # Extract leading numeric quantities or fractions (e.g. "1 1/2", "250", "0.5").
     match = re.match(r"^\s*(\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)\s*", value)
     if not match:
         return IngredientItem(name=original)
@@ -203,9 +227,14 @@ def parse_ingredient(line: str) -> IngredientItem:
         quantity = float(sum(Fraction(part) for part in match[1].split()))
     except (ValueError, ZeroDivisionError):
         return IngredientItem(name=original)
+
     rest = value[match.end() :].strip()
+
+    # Reject ranges or negative numbers because automatic deduction requires a definite quantity.
     if not rest or re.match(r"^(?:[-–]|to\b)", rest) or quantity <= 0:
         return IngredientItem(name=original)
+
+    # Standardize known Indian and Western cooking units to canonical unit symbols.
     units = {
         "g": "g",
         "gram": "g",
@@ -236,6 +265,8 @@ def parse_ingredient(line: str) -> IngredientItem:
     name = parts[1] if unit and len(parts) == 2 else rest
     if unit and len(parts) == 1:
         return IngredientItem(name=original)
+
+    # Separate ingredient name from preparation notes (e.g. "onions, finely chopped").
     name, _, note = name.partition(",")
     return IngredientItem(
         name=name.strip(),
@@ -254,6 +285,8 @@ def recipe_steps(value: Any) -> list[str]:
     Returns:
         List of cleaned instruction strings.
     """
+    # Schema.org permits recipeInstructions as plain text, HowToStep objects, or nested lists.
+    # Recursively traverse all three structural variants to yield an ordered instruction list.
     if isinstance(value, str):
         return [clean_text(line) for line in value.splitlines() if clean_text(line)]
     if isinstance(value, dict):
@@ -274,6 +307,8 @@ def duration_minutes(value: Any) -> int | None:
     Returns:
         Total duration in minutes, or None if invalid.
     """
+    # Parse ISO-8601 time strings (e.g., PT1H30M) into integer minutes for UI display and
+    # filtering.
     if not isinstance(value, str):
         return None
     try:
@@ -294,6 +329,8 @@ def extract_meta_image(html: str) -> str | None:
     Returns:
         Absolute HTTP/HTTPS image URL if present, else None.
     """
+    # Many recipe websites place high-resolution food hero images in OpenGraph meta tags.
+    # Scan the first 100k bytes of HTML to extract og:image or twitter:image fast.
     try:
         soup = BeautifulSoup(html[:100000], "html.parser")
         meta = (
@@ -320,6 +357,8 @@ def parse_nutrition(raw: Any) -> NutritionInfo | None:
     Returns:
         Parsed NutritionInfo object or None if absent.
     """
+    # Nutrition fields in Schema.org often include text strings like "250 calories" or "10 g".
+    # Use regular expressions to isolate numeric values for consistent macro calculations.
     if not isinstance(raw, dict):
         return None
 
@@ -355,10 +394,13 @@ def structured_recipe(page: SourcePage) -> RecipeCreate | None:
     Returns:
         Populated RecipeCreate model if structured recipe exists, else None.
     """
+    # Food blogs usually contain Schema.org JSON-LD metadata for search engines.
+    # Try structured extraction first because it is deterministic and incurs zero LLM token cost.
     try:
         candidates = loads(page.html)
     except (ValueError, TypeError, KeyError):
         return None
+
     for raw in candidates:
         try:
             ingredients = raw.get("recipeIngredient", [])
@@ -367,6 +409,8 @@ def structured_recipe(page: SourcePage) -> RecipeCreate | None:
             instructions = recipe_steps(raw.get("recipeInstructions", []))
             if not ingredients or not instructions:
                 continue
+
+            # Extract image URL from either string, list, or nested ImageObject dictionary.
             image = raw.get("image")
             if isinstance(image, list):
                 image = image[0] if image else None
@@ -377,6 +421,7 @@ def structured_recipe(page: SourcePage) -> RecipeCreate | None:
                 image = None
             if not image:
                 image = extract_meta_image(page.html)
+
             servings = re.search(r"\d+", str(raw.get("recipeYield", "")))
             nutrition = parse_nutrition(raw.get("nutrition"))
             recipe = RecipeCreate(
@@ -412,6 +457,9 @@ def youtube_url(url: str) -> str | None:
     Raises:
         SourceError: If the URL is an invalid video link or playlist.
     """
+    # YouTube video URLs exist in multiple forms: youtu.be, shorts, embed, and watch links.
+    # Canonicalize all valid video links into a single watch URL to ensure consistent
+    # downloader handling.
     parsed = urlsplit(url)
     if parsed.hostname == "youtu.be":
         video_id = parsed.path.strip("/")
@@ -429,6 +477,8 @@ def youtube_url(url: str) -> str | None:
             video_id = ""
     else:
         return None
+
+    # Reject playlists and channels because ingestion requires a specific single video.
     if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
         raise SourceError("Use a YouTube video link, not a playlist or channel.")
     return f"https://www.youtube.com/watch?v={video_id}"
@@ -466,6 +516,9 @@ class RecipeSourceReader:
         """
         validate_source_url(url)
         video = youtube_url(url)
+
+        # Route YouTube links to the video transcription pipeline.
+        # Fail early before downloading audio if LLM extraction credentials are missing.
         if video:
             if not self.config.anthropic_api_key:
                 raise ProviderNotConfiguredError("Set ANTHROPIC_API_KEY to import videos.")
@@ -474,14 +527,20 @@ class RecipeSourceReader:
             extracted.recipe.source_url = video
             extracted.recipe.video_url = video
             extracted.recipe.source_name = "YouTube"
+
+            # Derive YouTube high-quality thumbnail if none was extracted from recipe steps.
             video_id = parse_qs(urlsplit(video).query).get("v", [""])[0]
             if video_id and not extracted.recipe.image_url:
                 extracted.recipe.image_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
             return extracted, "youtube"
+
+        # Attempt deterministic JSON-LD extraction first before falling back to LLM extraction.
         page = await self.fetcher.fetch(url)
         recipe = await asyncio.to_thread(structured_recipe, page)
         if recipe is not None:
             return ExtractedRecipe(recipe=recipe, confidence=1), "json-ld"
+
+        # If no Schema.org markup is present, use Mozilla Readability to clean blog boilerplate.
         article = await asyncio.to_thread(lambda: clean_text(Document(page.html).summary()))
         extracted = await self.extractor.extract(article)
         extracted.recipe.source_url = page.url
@@ -500,6 +559,9 @@ class RecipeSourceReader:
         Returns:
             Tuple of (extracted_recipe, source_type).
         """
+        # User-supplied recipes do not have a web origin URL.
+        # Preserve user attribution while setting source_url to None to prevent false link
+        # generation.
         extracted = await self.extractor.extract(text)
         extracted.recipe.source_url = None
         extracted.recipe.source_name = source_name
@@ -518,6 +580,8 @@ class RecipeSourceReader:
         Raises:
             SourceError: If transcription times out or subprocess fails.
         """
+        # Run Whisper in a separate child process to isolate C-extension memory leaks and
+        # prevent crash cascades.
         with TemporaryDirectory(prefix="idunn-video-") as directory:
             output = Path(directory) / "transcript.txt"
             process = await asyncio.create_subprocess_exec(

@@ -32,10 +32,14 @@ def transcribe(
     from yt_dlp import YoutubeDL
     from yt_dlp.utils import DownloadError
 
+    # Abort downloads exceeding max_bytes during the transfer to prevent bandwidth waste and
+    # disk exhaustion.
     def check_progress(progress: dict) -> None:
         if progress.get("downloaded_bytes", 0) > max_bytes:
             raise DownloadError("Video audio exceeds the download limit.")
 
+    # Select bestaudio stream only to minimize network bandwidth and avoid downloading heavy
+    # video tracks.
     options = {
         "format": "bestaudio/best",
         "outtmpl": str(output.parent / "audio.%(ext)s"),
@@ -48,6 +52,9 @@ def transcribe(
         "max_filesize": max_bytes,
         "progress_hooks": [check_progress],
     }
+
+    # Inspect video metadata before starting the full download.
+    # Reject live streams and excessively long videos to preserve compute resources.
     with YoutubeDL(options) as downloader:
         info = downloader.extract_info(url, download=False)
         if not info or info.get("is_live") or not info.get("duration"):
@@ -56,8 +63,13 @@ def transcribe(
             raise ValueError("Video is longer than VIDEO_MAX_SECONDS.")
         downloader.process_info(info)
         audio = Path(downloader.prepare_filename(info))
+
+    # Verify that the downloaded audio file is present and within size bounds before
+    # initializing Whisper.
     if not audio.is_file() or audio.stat().st_size > max_bytes:
         raise ValueError("Video audio is missing or exceeds VIDEO_MAX_BYTES.")
+
+    # Transcribe audio using 8-bit quantized CPU computation for speed and low memory usage.
     whisper = WhisperModel(
         model, device="cpu", compute_type="int8", local_files_only=local_files_only
     )
@@ -65,6 +77,8 @@ def transcribe(
     text = "\n".join(segment.text.strip() for segment in segments)
     if not text.strip():
         raise ValueError("No speech was found in this video.")
+
+    # Write output to the destination path so the parent process can read the transcript.
     output.write_text(text, encoding="utf-8")
 
 

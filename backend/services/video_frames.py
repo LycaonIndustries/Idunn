@@ -18,9 +18,14 @@ def get_ffmpeg_executable() -> str:
     Returns:
         The executable command name or full path to ffmpeg.exe.
     """
+    # Check system PATH first for portable deployment across operating systems.
     found = shutil.which("ffmpeg")
     if found:
         return found
+
+    # On Windows workstations, ffmpeg is commonly installed in standard Chocolatey or local
+    # folders.
+    # Check these directories before failing to simplify developer setup.
     common_locations = [
         r"C:\ProgramData\chocolatey\bin\ffmpeg.exe",
         r"C:\ffmpeg\bin\ffmpeg.exe",
@@ -47,6 +52,9 @@ def extract_frames_sync(video_path: Path, output_dir: Path, fps: int = 1) -> lis
     """
     ffmpeg = get_ffmpeg_executable()
     output_pattern = str(output_dir / "frame_%04d.jpg")
+
+    # Sample video at 1 frame per second and cap total frames at 120.
+    # This keeps extraction fast and limits disk storage for large video files.
     cmd = [
         ffmpeg,
         "-y",
@@ -60,6 +68,9 @@ def extract_frames_sync(video_path: Path, output_dir: Path, fps: int = 1) -> lis
         "3",  # High quality jpeg
         output_pattern,
     ]
+
+    # Set timeout to prevent corrupt or non-terminating video streams from locking worker
+    # processes.
     try:
         result = subprocess.run(cmd, capture_output=True, timeout=60, check=False)
         if result.returncode != 0:
@@ -68,6 +79,7 @@ def extract_frames_sync(video_path: Path, output_dir: Path, fps: int = 1) -> lis
     except (subprocess.TimeoutExpired, FileNotFoundError) as exc:
         raise ExtractionError("ffmpeg frame extraction timed out or is unavailable.") from exc
 
+    # Confirm extracted frames exist on disk before returning.
     frames = sorted(output_dir.glob("frame_*.jpg"))
     if not frames:
         raise ExtractionError("No video frames could be decoded from this video.")
@@ -84,17 +96,22 @@ async def sample_video_keyframes(video_bytes: bytes, max_frames: int = 15) -> li
     Returns:
         List of JPEG-encoded byte arrays for each sampled keyframe.
     """
+    # Use temporary directory context to ensure all intermediate frame files delete automatically.
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         video_file = tmp_path / "input_video.mp4"
         frames_dir = tmp_path / "frames"
         frames_dir.mkdir()
 
+        # Write uploaded bytes to disk because ffmpeg requires seekable filesystem input.
         video_file.write_bytes(video_bytes)
 
+        # Offload ffmpeg process execution to a worker thread so the async loop remains
+        # responsive.
         frame_paths = await asyncio.to_thread(extract_frames_sync, video_file, frames_dir, 1)
 
-        # Evenly downsample to max_frames
+        # Downsample frames uniformly across the video timeline.
+        # This keeps multimodal LLM payload sizes within token and context limits.
         total = len(frame_paths)
         if total <= max_frames:
             selected_paths = frame_paths

@@ -50,6 +50,8 @@ def confirmed_ids(matches: list[IngredientMatch]) -> list[str]:
     Returns:
         List of distinct confirmed ingredient IDs.
     """
+    # Store only unique confirmed ingredient identifiers in the recipe document.
+    # Remove duplicate keys so database indexes and inventory lookups stay fast and consistent.
     return list(
         dict.fromkeys(
             match.ingredient_id
@@ -77,6 +79,8 @@ class RecipeIngestService:
             reader: Source reader for text, blogs, and videos.
             embedder: Embedding client for vector representations.
         """
+        # Initialize dependencies with defaults to allow zero-config fallback when optional
+        # services are absent.
         self.db = db
         self.config = config or settings
         self.reader = reader or RecipeSourceReader(self.config)
@@ -92,6 +96,9 @@ class RecipeIngestService:
         Returns:
             The ingestion result including recipe ID and review status.
         """
+        # Web recipes contain either structured schema data or unstructured blog text.
+        # Fetch and parse the remote source first to extract recipe fields before database
+        # persistence.
         extracted, source = await self.reader.from_url(url)
         return await self.store(extracted, source)
 
@@ -105,6 +112,8 @@ class RecipeIngestService:
         Returns:
             The ingestion result including recipe ID and review status.
         """
+        # Family recipes often arrive as unstructured text messages or notes.
+        # Parse text into structured recipe format before saving to the database.
         extracted, source = await self.reader.from_text(text, source_name)
         return await self.store(extracted, source)
 
@@ -127,10 +136,17 @@ class RecipeIngestService:
         Raises:
             ProviderNotConfiguredError: If Gemini API key is missing.
         """
+        # Physical cookbook pages and social media screenshots do not have text streams.
+        # Verify provider configuration early to avoid processing unparseable binary data.
         if not self.config.gemini_api_key:
             raise ProviderNotConfiguredError("Set GEMINI_API_KEY to extract recipes from images.")
+
+        # Extract structured recipe using multimodal vision.
         extractor = GeminiRecipeExtractor(self.config)
         extracted = await extractor.extract_image(image_bytes, mime_type)
+
+        # Store image data in the recipe record if no remote image exists.
+        # This allows the user to see the original source photo directly in the UI.
         if not extracted.recipe.image_url:
             import base64
 
@@ -158,6 +174,8 @@ class RecipeIngestService:
             ProviderNotConfiguredError: If no multimodal audio provider is configured.
             ExtractionError: If no speech could be extracted.
         """
+        # Users frequently record voice notes while cooking instead of typing.
+        # Use cloud Gemini if available to avoid heavy local CPU transcription load.
         if self.config.gemini_api_key:
             extractor = GeminiRecipeExtractor(self.config)
             extracted = await extractor.extract_audio(audio_bytes, mime_type)
@@ -168,6 +186,8 @@ class RecipeIngestService:
                 "Set GEMINI_API_KEY or ANTHROPIC_API_KEY to extract recipes from audio."
             )
 
+        # Local Whisper requires a file path on disk to decode compressed audio containers.
+        # Write bytes to a temporary file and ensure cleanup in the finally block.
         import asyncio
         import tempfile
         from pathlib import Path
@@ -184,6 +204,7 @@ class RecipeIngestService:
             tmp_path = Path(tmp.name)
             tmp.write(audio_bytes)
 
+        # Run transcription in a separate thread to prevent blocking the async event loop.
         try:
             from faster_whisper import WhisperModel
 
@@ -224,15 +245,21 @@ class RecipeIngestService:
         Raises:
             ProviderNotConfiguredError: If Gemini API key is missing.
         """
+        # Video extraction requires multimodal vision capabilities.
+        # Fail immediately if the required API credentials are not set.
         if not self.config.gemini_api_key:
             raise ProviderNotConfiguredError(
                 "Set GEMINI_API_KEY to extract recipes from silent video frames."
             )
         from .video_frames import sample_video_keyframes
 
+        # Sample keyframes at 1 frame per second to keep token counts small while capturing
+        # visual steps.
         keyframes = await sample_video_keyframes(video_bytes, max_frames=15)
         extractor = GeminiRecipeExtractor(self.config)
         extracted = await extractor.extract_video_frames(keyframes)
+
+        # Store the first keyframe as the cover thumbnail so the recipe card has a visual preview.
         if not extracted.recipe.image_url and keyframes:
             import base64
 
@@ -254,13 +281,24 @@ class RecipeIngestService:
             ExtractionError: If the extracted recipe is incomplete or invalid.
         """
         recipe = extracted.recipe
+
+        # Validate that the recipe contains core components before database insertion.
+        # Prevent saving empty or malicious payloads that could corrupt the recipe vault.
         if not recipe.title.strip() or not recipe.ingredients or not recipe.steps:
             raise ExtractionError(
                 "A recipe needs a title, at least one ingredient, and cooking steps."
             )
         if len(recipe.ingredients) > 200 or len(recipe.steps) > 500:
             raise ExtractionError("This recipe has too many ingredients or steps to import.")
+
+        # Match recipe ingredients to canonical records to enable pantry tracking and macro
+        # analysis.
         matches, warnings = await self.matcher.match(recipe)
+
+        # Generate vector embeddings when Voyage AI is configured so semantic recipe search is
+        # available.
+        # Concatenate title, description, ingredients, and steps so the embedding captures full
+        # culinary context.
         embedding = None
         if self.embedder.configured:
             text = "\n".join(
@@ -274,6 +312,8 @@ class RecipeIngestService:
             embedding = (await self.embedder.embed([text]))[0]
         else:
             warnings.append("Embeddings skipped: VOYAGE_API_KEY is not configured.")
+
+        # Flag low-confidence extractions for manual user review to maintain data quality.
         extraction_reviewed = extracted.confidence >= self.config.extraction_confidence_threshold
         try:
             document = Recipe(
@@ -292,7 +332,9 @@ class RecipeIngestService:
             raise ExtractionError(
                 "The imported recipe failed validation; nothing was saved."
             ) from exc
-        # Matches and review state live in the same document: no half-written review queue.
+
+        # Store ingredient matches and review flags in the same document.
+        # This prevents partial writes and eliminates orphaned review queue entries.
         data = document.model_dump(exclude={"id"})
         data["_id"] = ObjectId(document.id)
         await self.db[COLLECTION_RECIPES].insert_one(data)
