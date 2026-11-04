@@ -37,7 +37,7 @@ jobs:
         run: uv run python -m pytest
 
       - name: Verify Review Lock & PR Granularity
-        run: uv run python scripts/dev_review.py --mode=verify
+        run: uv run python scripts/dev_review.py --mode=audit --strict
 
   frontend-checks:
     name: Frontend Lint & Tests (Bun & React 19)
