@@ -12,6 +12,9 @@ import type {
   ReceiptConfirmResponse,
   Recipe,
   SettingsStatus,
+  ShoppingListItem,
+  ShoppingListItemCreate,
+  ShoppingListItemUpdate,
   UpdateSettingsPayload,
 } from './types'
 
@@ -421,6 +424,101 @@ export async function cookRecipe(
   // Trigger backend FEFO deduction to keep pantry stock synchronized with cooked meals.
   const url = `${BASE_URL}/api/v1/recipes/${recipeId}/cook?servings_multiplier=${servingsMultiplier}`
   const res = await fetch(url, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+
+/**
+ * Retrieve all items on the shopping list.
+ */
+export async function fetchShoppingList(): Promise<ShoppingListItem[]> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Add an item to the shopping list.
+ */
+export async function createShoppingItem(
+  payload: ShoppingListItemCreate,
+): Promise<ShoppingListItem> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/items`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Batch add items to the shopping list.
+ */
+export async function createShoppingItemsBatch(
+  items: ShoppingListItemCreate[],
+): Promise<ShoppingListItem[]> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ items }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Update a shopping list item.
+ */
+export async function updateShoppingItem(
+  itemId: string,
+  payload: ShoppingListItemUpdate,
+): Promise<ShoppingListItem> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/items/${itemId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Delete a shopping list item.
+ */
+export async function deleteShoppingItem(itemId: string): Promise<void> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/items/${itemId}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+}
+
+/**
+ * Remove all checked items from the shopping list.
+ */
+export async function clearPurchasedShoppingItems(): Promise<{ deleted_count: number }> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/clear-purchased`, {
     method: 'POST',
   })
   if (!res.ok) {
