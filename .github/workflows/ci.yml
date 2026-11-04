@@ -28,10 +28,10 @@ jobs:
         run: uv sync
 
       - name: Run Ruff linter
-        run: uv run ruff check backend tests
+        run: uv run ruff check backend tests scripts
 
       - name: Run Ruff format check
-        run: uv run ruff format --check backend tests
+        run: uv run ruff format --check backend tests scripts
 
       - name: Run Pytest test suite
         run: uv run python -m pytest
@@ -82,3 +82,35 @@ jobs:
 
       - name: Run Frontend Dependency Audit (bun audit)
         run: bun audit --cwd frontend
+
+  ai-review:
+    name: Automated AI Code Review
+    runs-on: ubuntu-latest
+    needs: [backend-checks, frontend-checks, security-audit]
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Install Python 3.13
+        run: uv python install 3.13
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run AI Review Engine
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          uv run python scripts/ai_review.py --mode=github-pr --base=origin/${{ github.base_ref }} --head=${{ github.event.pull_request.head.sha }}
