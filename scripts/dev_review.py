@@ -66,15 +66,21 @@ def get_head_commit() -> str:
     return run_git(["rev-parse", "HEAD"])
 
 
-def resolve_base_branch(root: Path) -> str:
-    """Determine the base target branch for comparison (origin/main or main).
+def resolve_base_branch(root: Path, target_base: str | None = None) -> str:
+    """Determine the base target branch for comparison.
 
     Args:
         root: Git repository root directory.
+        target_base: Optional explicitly requested base branch.
 
     Returns:
         Resolved base branch ref string.
     """
+    if target_base:
+        return target_base
+    env_base = os.environ.get("REVIEW_BASE")
+    if env_base:
+        return env_base
     res = subprocess.run(
         ["git", "rev-parse", "--verify", "origin/main"],
         cwd=root,
@@ -165,11 +171,14 @@ def compute_signature(payload: dict[str, Any], secret: bytes) -> str:
     return hmac.new(secret, serialized.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def audit_repository(root: Path, max_lines: int = DEFAULT_MAX_DIFF_LINES) -> dict[str, Any]:
+def audit_repository(
+    root: Path, base_branch: str | None = None, max_lines: int = DEFAULT_MAX_DIFF_LINES
+) -> dict[str, Any]:
     """Execute review checks and create signed lockfile structure.
 
     Args:
         root: Git repository root directory.
+        base_branch: Optional base branch target.
         max_lines: Maximum permitted lines in diff.
 
     Returns:
@@ -177,7 +186,7 @@ def audit_repository(root: Path, max_lines: int = DEFAULT_MAX_DIFF_LINES) -> dic
     """
     branch = get_current_branch()
     head = get_head_commit()
-    base = resolve_base_branch(root)
+    base = resolve_base_branch(root, base_branch)
     diff = calculate_diff_stats(root, base, head)
     secret = get_review_secret(root)
 
@@ -275,6 +284,12 @@ def main() -> int:
         help="audit: compute and update lockfile; verify: validate lockfile",
     )
     parser.add_argument(
+        "--base",
+        type=str,
+        default=None,
+        help="Target base branch for comparison (e.g. parent branch for stacked PRs).",
+    )
+    parser.add_argument(
         "--max-lines",
         type=int,
         default=DEFAULT_MAX_DIFF_LINES,
@@ -297,7 +312,7 @@ def main() -> int:
         print(f"[OK] {msg}")
         return 0
 
-    audit_data = audit_repository(root, max_lines=args.max_lines)
+    audit_data = audit_repository(root, base_branch=args.base, max_lines=args.max_lines)
     write_lockfile(root, audit_data)
     metrics = audit_data["diff_metrics"]
     diff_lines = metrics["total_diff_lines"]
