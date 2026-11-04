@@ -1,3 +1,9 @@
+/**
+ * Full-page interactive recipe detail viewer for Iðunn Kitchen OS.
+ * Features hero photo rendering, dynamic ingredient serving scaler (0.5x to 4x),
+ * step completion checkboxes, nutrition macro progress bars, and clipboard sharing.
+ */
+
 import React, { useState } from 'react'
 import {
   ArrowLeft,
@@ -16,41 +22,67 @@ import {
 } from 'lucide-react'
 import type { Recipe } from '../types'
 
+/**
+ * Properties for RecipeDetailPage component.
+ */
 interface RecipeDetailPageProps {
+  /** Recipe document to display in detail. */
   recipe: Recipe
+  /** Callback to return to the recipe vault grid. */
   onBack: () => void
+  /** Callback to remove this recipe from the vault. */
   onDelete: (id: string) => void
 }
 
+/**
+ * Detailed recipe view with interactive scaling and cooking progress tracking.
+ *
+ * @param props - Component properties.
+ * @returns RecipeDetailPage JSX element.
+ */
 export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
   recipe,
   onBack,
   onDelete,
 }) => {
+  // Real-time scaling factor for ingredient quantities (0.5x, 1x, 1.5x, 2x, 4x).
   const [multiplier, setMultiplier] = useState<number>(1)
+
+  // Track checked ingredients during kitchen prep.
   const [checkedIngredients, setCheckedIngredients] = useState<Record<number, boolean>>({})
+
+  // Highlight currently focused step for hands-free or counter cooking.
   const [activeStep, setActiveStep] = useState<number | null>(null)
+
+  // Track completed cooking steps to maintain position in long recipes.
   const [completedSteps, setCompletedSteps] = useState<Record<number, boolean>>({})
+
+  // Visual confirmation timer for link clipboard copy.
   const [copied, setCopied] = useState(false)
 
+  // Resolve recipe ID handling MongoDB (_id) and Supabase (id) naming conventions.
   const recipeId = recipe.id || recipe._id || ''
   const baseServings = recipe.servings || 2
   const currentServings = Math.round(baseServings * multiplier * 10) / 10
 
+  // Toggle ingredient checked state when clicked.
   const toggleIngredient = (idx: number) => {
     setCheckedIngredients((prev) => ({ ...prev, [idx]: !prev[idx] }))
   }
 
+  // Toggle step completion status to strike out finished instructions.
   const toggleStep = (stepNum: number) => {
     setCompletedSteps((prev) => ({ ...prev, [stepNum]: !prev[stepNum] }))
   }
 
+  // Copy current recipe browser URL to clipboard for family sharing.
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Prompt confirmation dialog before permanent deletion from vault.
   const handleDelete = () => {
     if (window.confirm(`Are you sure you want to delete "${recipe.title}" from your vault?`)) {
       onDelete(recipeId)
@@ -63,7 +95,7 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
 
   return (
     <div className="max-w-5xl mx-auto py-6 px-4 sm:px-6">
-      {/* Top Bar Navigation */}
+      {/* Top action bar: back navigation, share button, and delete trigger */}
       <div className="flex items-center justify-between mb-6">
         <button
           onClick={onBack}
@@ -78,7 +110,11 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
             onClick={handleShare}
             className="flex items-center space-x-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-emerald-400" />
+            ) : (
+              <Share2 className="w-3.5 h-3.5" />
+            )}
             <span>{copied ? 'Link Copied' : 'Share'}</span>
           </button>
 
@@ -92,7 +128,7 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
         </div>
       </div>
 
-      {/* Hero Header Card */}
+      {/* Hero Header Card with source photo and metadata overlays */}
       <div className="relative rounded-3xl overflow-hidden border border-slate-800 bg-slate-900/90 shadow-2xl mb-8">
         {recipe.image_url ? (
           <div className="relative w-full h-72 sm:h-96 overflow-hidden bg-slate-950">
@@ -101,6 +137,7 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               alt={recipe.title}
               className="w-full h-full object-cover object-center transform hover:scale-105 transition-transform duration-700"
             />
+            {/* Gradient overlay ensures title readability over arbitrary hero images */}
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
           </div>
         ) : (
@@ -109,12 +146,14 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               <div className="w-16 h-16 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center mx-auto mb-3 shadow-inner">
                 <ChefHat className="w-8 h-8" />
               </div>
-              <p className="text-xs uppercase tracking-wider text-orange-400 font-semibold">Iðunn Vault Recipe</p>
+              <p className="text-xs uppercase tracking-wider text-orange-400 font-semibold">
+                Iðunn Vault Recipe
+              </p>
             </div>
           </div>
         )}
 
-        {/* Content Overlay / Info */}
+        {/* Content Header: badges, title, description, and key statistics */}
         <div className="p-6 sm:p-8 -mt-16 sm:-mt-24 relative z-10">
           <div className="flex flex-wrap items-center gap-2 mb-3">
             {recipe.cuisine_type && (
@@ -165,7 +204,7 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
             </p>
           )}
 
-          {/* Quick Metrics Bar */}
+          {/* Quick Metrics Bar: Total Time, Portions, Prep/Cook split, Ingredient Count */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4">
             <div className="flex items-center space-x-3">
               <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20">
@@ -173,7 +212,9 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               </div>
               <div>
                 <div className="text-xs text-slate-400 font-medium">Total Time</div>
-                <div className="text-sm font-bold text-slate-100">{totalTime ? `${totalTime} min` : 'Unspecified'}</div>
+                <div className="text-sm font-bold text-slate-100">
+                  {totalTime ? `${totalTime} min` : 'Unspecified'}
+                </div>
               </div>
             </div>
 
@@ -205,14 +246,16 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               </div>
               <div>
                 <div className="text-xs text-slate-400 font-medium">Ingredients</div>
-                <div className="text-sm font-bold text-slate-100">{recipe.ingredients.length} items</div>
+                <div className="text-sm font-bold text-slate-100">
+                  {recipe.ingredients.length} items
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Nutrition Information Panel */}
+      {/* Nutrition Information Panel with macro progress meters */}
       <div className="bg-slate-900/90 rounded-3xl border border-slate-800 p-6 sm:p-7 shadow-lg mb-8">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2.5">
@@ -234,10 +277,13 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
 
         {nutrition ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+            {/* Protein Card */}
             <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
               <div className="text-xs text-slate-400 font-medium mb-1">Protein</div>
               <div className="text-lg font-bold text-emerald-400">
-                {nutrition.protein !== null && nutrition.protein !== undefined ? `${nutrition.protein}g` : '—'}
+                {nutrition.protein !== null && nutrition.protein !== undefined
+                  ? `${nutrition.protein}g`
+                  : '—'}
               </div>
               <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
                 <div
@@ -247,10 +293,13 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               </div>
             </div>
 
+            {/* Carbohydrates Card */}
             <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
               <div className="text-xs text-slate-400 font-medium mb-1">Carbohydrates</div>
               <div className="text-lg font-bold text-amber-400">
-                {nutrition.carbs !== null && nutrition.carbs !== undefined ? `${nutrition.carbs}g` : '—'}
+                {nutrition.carbs !== null && nutrition.carbs !== undefined
+                  ? `${nutrition.carbs}g`
+                  : '—'}
               </div>
               <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
                 <div
@@ -260,6 +309,7 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               </div>
             </div>
 
+            {/* Fat Card */}
             <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
               <div className="text-xs text-slate-400 font-medium mb-1">Total Fat</div>
               <div className="text-lg font-bold text-rose-400">
@@ -273,10 +323,13 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               </div>
             </div>
 
+            {/* Dietary Fiber Card */}
             <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
               <div className="text-xs text-slate-400 font-medium mb-1">Dietary Fiber</div>
               <div className="text-lg font-bold text-sky-400">
-                {nutrition.fiber !== null && nutrition.fiber !== undefined ? `${nutrition.fiber}g` : '—'}
+                {nutrition.fiber !== null && nutrition.fiber !== undefined
+                  ? `${nutrition.fiber}g`
+                  : '—'}
               </div>
               <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
                 <div
@@ -288,14 +341,15 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
           </div>
         ) : (
           <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 text-center text-sm text-slate-400">
-            Nutrition information is being estimated from recipe ingredients. Macro breakdown will appear once synced.
+            Nutrition information is being estimated from recipe ingredients. Macro breakdown will
+            appear once synced.
           </div>
         )}
       </div>
 
-      {/* Main Recipe Body (Ingredients & Steps) */}
+      {/* Main Recipe Body (Ingredients & Instructions) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Ingredients Column */}
+        {/* Left Column: Ingredients & Serving Scaler */}
         <div className="lg:col-span-5 space-y-6">
           <div className="bg-slate-900/90 rounded-3xl border border-slate-800 p-6 shadow-lg">
             <div className="flex items-center justify-between mb-4">
@@ -306,7 +360,7 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               <span className="text-xs text-slate-400">{recipe.ingredients.length} items</span>
             </div>
 
-            {/* Serving Scaler */}
+            {/* Serving Scaler Buttons */}
             <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5 mb-5">
               <div className="text-xs font-medium text-slate-400 mb-2 flex items-center justify-between">
                 <span>Scale Servings:</span>
@@ -329,10 +383,12 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               </div>
             </div>
 
-            {/* Ingredient Checklist */}
+            {/* Ingredient Checklist items */}
             <div className="space-y-2">
               {recipe.ingredients.map((item, idx) => {
-                const scaledQty = item.quantity ? Math.round(item.quantity * multiplier * 100) / 100 : null
+                const scaledQty = item.quantity
+                  ? Math.round(item.quantity * multiplier * 100) / 100
+                  : null
                 const isChecked = Boolean(checkedIngredients[idx])
 
                 return (
@@ -357,7 +413,11 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
 
                     <div className="flex-1 text-sm">
                       <div className="flex items-baseline justify-between gap-2">
-                        <span className={`font-semibold ${isChecked ? 'line-through text-slate-400' : 'text-slate-100'}`}>
+                        <span
+                          className={`font-semibold ${
+                            isChecked ? 'line-through text-slate-400' : 'text-slate-100'
+                          }`}
+                        >
                           {item.name}
                         </span>
                         {scaledQty !== null && (
@@ -366,9 +426,7 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
                           </span>
                         )}
                       </div>
-                      {item.notes && (
-                        <p className="text-xs text-slate-400 mt-0.5">{item.notes}</p>
-                      )}
+                      {item.notes && <p className="text-xs text-slate-400 mt-0.5">{item.notes}</p>}
                     </div>
                   </div>
                 )
@@ -377,7 +435,7 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
           </div>
         </div>
 
-        {/* Steps Column */}
+        {/* Right Column: Step-by-Step Cooking Method */}
         <div className="lg:col-span-7 space-y-6">
           <div className="bg-slate-900/90 rounded-3xl border border-slate-800 p-6 shadow-lg">
             <div className="flex items-center justify-between mb-5">
@@ -401,8 +459,8 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
                       isCompleted
                         ? 'bg-slate-950/40 border-slate-800/50 opacity-60'
                         : isSelected
-                        ? 'bg-slate-950 border-orange-500/60 ring-1 ring-orange-500/40 shadow-lg'
-                        : 'bg-slate-950/70 border-slate-800/80 hover:border-slate-700'
+                          ? 'bg-slate-950 border-orange-500/60 ring-1 ring-orange-500/40 shadow-lg'
+                          : 'bg-slate-950/70 border-slate-800/80 hover:border-slate-700'
                     }`}
                   >
                     <div className="flex items-start space-x-3.5">
@@ -422,7 +480,11 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
                       </button>
 
                       <div className="flex-1">
-                        <p className={`text-sm sm:text-base leading-relaxed ${isCompleted ? 'line-through text-slate-400' : 'text-slate-100'}`}>
+                        <p
+                          className={`text-sm sm:text-base leading-relaxed ${
+                            isCompleted ? 'line-through text-slate-400' : 'text-slate-100'
+                          }`}
+                        >
                           {step.instruction}
                         </p>
 
@@ -444,3 +506,5 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
     </div>
   )
 }
+
+export default RecipeDetailPage

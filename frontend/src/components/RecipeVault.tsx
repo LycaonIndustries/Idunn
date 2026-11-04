@@ -3,15 +3,30 @@ import { Search, Filter, RefreshCw, PlusCircle, BookOpen } from 'lucide-react'
 import type { Recipe } from '../types'
 import { RecipeCard } from './RecipeCard'
 
+/**
+ * Properties for the RecipeVault component.
+ */
 interface RecipeVaultProps {
+  /** Recipe collection fetched from the backend. */
   recipes: Recipe[]
+  /** Indicates whether an active network fetch is running. */
   loading: boolean
+  /** Callback to trigger an asynchronous reload of the recipe vault. */
   onRefresh: () => void
+  /** Callback to delete a recipe by unique identifier. */
   onDeleteRecipe: (id: string) => void
+  /** Callback to navigate to the AI ingest / capture tab. */
   onNavigateToCapture: () => void
+  /** Callback to select a recipe and open its full detail view. */
   onSelectRecipe?: (recipe: Recipe) => void
 }
 
+/**
+ * RecipeVault displays a searchable, filterable grid of all saved recipes.
+ *
+ * @param props - Component configuration and action handlers.
+ * @returns Rendered React element containing search controls and recipe cards.
+ */
 export const RecipeVault: React.FC<RecipeVaultProps> = ({
   recipes,
   loading,
@@ -20,17 +35,24 @@ export const RecipeVault: React.FC<RecipeVaultProps> = ({
   onNavigateToCapture,
   onSelectRecipe,
 }) => {
+  // Store search terms locally to provide instant keystroke filtering.
   const [search, setSearch] = useState('')
+
+  // Track the active dietary or difficulty filter preset.
   const [filterType, setFilterType] = useState<string>('all')
 
+  // Execute filtering in memory to prevent slow round-trip queries to the server.
   const filtered = recipes.filter((r) => {
+    // Normalise text to lowercase so user casing differences do not block matches.
+    const term = search.toLowerCase()
     const matchesSearch =
-      r.title.toLowerCase().includes(search.toLowerCase()) ||
-      r.ingredients.some((i) => i.name.toLowerCase().includes(search.toLowerCase())) ||
-      (r.tags && r.tags.some((t) => t.toLowerCase().includes(search.toLowerCase())))
+      r.title.toLowerCase().includes(term) ||
+      r.ingredients.some((i) => i.name.toLowerCase().includes(term)) ||
+      (r.tags && r.tags.some((t) => t.toLowerCase().includes(term)))
 
     if (!matchesSearch) return false
 
+    // Apply strict dietary filters so vegetarian users do not see meat recipes.
     if (filterType === 'all') return true
     if (filterType === 'veg') return r.cuisine_type === 'veg'
     if (filterType === 'non_veg') return r.cuisine_type === 'non_veg'
@@ -40,7 +62,7 @@ export const RecipeVault: React.FC<RecipeVaultProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6">
-      {/* Header */}
+      {/* Display vault header with total counts and primary call-to-actions. */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-100 tracking-tight">Recipe Vault</h1>
@@ -49,6 +71,7 @@ export const RecipeVault: React.FC<RecipeVaultProps> = ({
           </p>
         </div>
 
+        {/* Action buttons allow data synchronization and navigation to ingestion. */}
         <div className="flex items-center space-x-3">
           <button
             onClick={onRefresh}
@@ -69,7 +92,7 @@ export const RecipeVault: React.FC<RecipeVaultProps> = ({
         </div>
       </div>
 
-      {/* Search & Filter Bar */}
+      {/* Render input field and dietary filter chips for rapid recipe discovery. */}
       <div className="flex flex-col sm:flex-row gap-3 mb-8">
         <div className="relative flex-1">
           <Search className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
@@ -82,6 +105,7 @@ export const RecipeVault: React.FC<RecipeVaultProps> = ({
           />
         </div>
 
+        {/* Quick-filter pill buttons filter by vegetarian status and cooking difficulty. */}
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0">
           <Filter className="w-4 h-4 text-slate-500 mr-1 hidden sm:block" />
           {[
@@ -105,7 +129,7 @@ export const RecipeVault: React.FC<RecipeVaultProps> = ({
         </div>
       </div>
 
-      {/* Grid or Empty State */}
+      {/* Render grid when items match, or present a guided empty state. */}
       {filtered.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((recipe, idx) => (
@@ -124,7 +148,9 @@ export const RecipeVault: React.FC<RecipeVaultProps> = ({
           </div>
           <h3 className="text-base font-semibold text-slate-200">No recipes found</h3>
           <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
-            {search ? 'Try adjusting your search query or filter.' : 'Capture your first recipe from a cookbook photo, reel, or URL.'}
+            {search
+              ? 'Try adjusting your search query or filter.'
+              : 'Capture your first recipe from a cookbook photo, reel, or URL.'}
           </p>
           <button
             onClick={onNavigateToCapture}

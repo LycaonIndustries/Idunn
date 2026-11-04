@@ -1,19 +1,30 @@
-"""MongoDB connection and collection management for Iðunn."""
+"""Database connection and collection management for Iðunn."""
 
 from __future__ import annotations
 
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
+from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 
 from ..config import settings
 
 
+# Route collection requests to active storage engine.
 class DatabaseRouter:
     """Routes collection lookups to Supabase or MongoDB based on configuration."""
 
     def __getitem__(self, name: str) -> Any:
+        """Resolve collection adapter by target collection name.
+
+        Args:
+            name: Table or collection name to resolve.
+
+        Returns:
+            Collection adapter instance for Supabase or MongoDB.
+        """
+        # Return Supabase client wrapper when configured for cloud storage.
         if settings.database_backend == "supabase":
             from .supabase_client import SupabaseClientManager
 
@@ -24,6 +35,7 @@ class DatabaseRouter:
 _db_router = DatabaseRouter()
 
 
+# Manage singleton connection lifecycle across requests.
 class MongoClient:
     """Singleton Database client wrapper with Supabase & MongoDB support."""
 
@@ -33,7 +45,12 @@ class MongoClient:
 
     @classmethod
     def get_client(cls) -> Any:
-        """Get or create client."""
+        """Get or initialize the underlying database client connection.
+
+        Returns:
+            Active client driver instance.
+        """
+        # Create client connection only once to preserve connection pooling.
         if cls._client is None:
             cls._client = AsyncIOMotorClient(
                 settings.mongodb_url,
@@ -43,7 +60,11 @@ class MongoClient:
 
     @classmethod
     def get_db(cls) -> Any:
-        """Get or create database reference."""
+        """Get or initialize database reference.
+
+        Returns:
+            Database or router handle.
+        """
         if settings.database_backend == "supabase":
             return _db_router
         if cls._db is None:
@@ -53,6 +74,7 @@ class MongoClient:
     @classmethod
     def enable_in_memory_fallback(cls) -> None:
         """Enable in-memory mock client when live database is unreachable."""
+        # Use in-memory mock so developers can build features without running Docker.
         try:
             from mongomock_motor import AsyncMongoMockClient
 
@@ -64,7 +86,11 @@ class MongoClient:
 
     @classmethod
     def is_mock(cls) -> bool:
-        """True if running in in-memory fallback mode."""
+        """Check whether current storage engine is operating in mock mode.
+
+        Returns:
+            True if running in mock mode, otherwise False.
+        """
         if settings.database_backend == "supabase":
             from .supabase_client import SupabaseClientManager
 
@@ -73,7 +99,8 @@ class MongoClient:
 
     @classmethod
     async def close(cls) -> None:
-        """Close connection."""
+        """Close database connection pool on server shutdown."""
+        # Cleanly release socket resources when terminating processes.
         if cls._client is not None and not cls._is_mock:
             cls._client.close()
         cls._client = None
@@ -82,7 +109,12 @@ class MongoClient:
 
     @classmethod
     async def ping(cls) -> bool:
-        """Check database connectivity."""
+        """Verify database connectivity.
+
+        Returns:
+            True if database responds to ping command, otherwise False.
+        """
+        # Check Supabase connectivity when operating under cloud storage mode.
         if settings.database_backend == "supabase":
             from .supabase_client import SupabaseClientManager
 
@@ -96,8 +128,13 @@ class MongoClient:
             return False
 
 
-def get_db() -> AsyncGenerator[Any, None]:
-    """FastAPI dependency for database access."""
+def get_db() -> AsyncGenerator[Any]:
+    """Provide FastAPI dependency for database access.
+
+    Yields:
+        Database or collection router instance for the request lifecycle.
+    """
+    # Supply correct database router depending on current configuration.
     if settings.database_backend == "supabase":
         yield _db_router
     else:
@@ -115,17 +152,31 @@ COLLECTION_NUTRITION = "nutrition"
 COLLECTION_EVAL_RUNS = "eval_runs"
 
 
-def get_collection(collection_name: str):
-    """Get a collection by name."""
+def get_collection(collection_name: str) -> Any:
+    """Retrieve collection adapter by name.
+
+    Args:
+        collection_name: Name of target collection.
+
+    Returns:
+        Collection adapter instance.
+    """
     return MongoClient.get_db()[collection_name]
 
 
 class MongoDocument(BaseModel):
-    """Base class for documents stored in MongoDB."""
+    """Base class for documents stored in database collections."""
 
     model_config = {"populate_by_name": True}
 
     @classmethod
     def get_collection_name(cls) -> str:
-        """Return the MongoDB collection name for this document type."""
+        """Return the collection name for this document type.
+
+        Returns:
+            Collection name string.
+
+        Raises:
+            NotImplementedError: Subclasses must provide collection name.
+        """
         raise NotImplementedError

@@ -8,8 +8,9 @@ Provides an async interface for Supabase (PostgreSQL + JSONB) with:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from datetime import datetime
-from typing import Any, Sequence
+from typing import Any
 from uuid import uuid4
 
 from bson import ObjectId
@@ -19,7 +20,15 @@ from ..config import settings
 
 
 def _format_id(val: Any) -> str:
-    if isinstance(val, (ObjectId,)):
+    """Format MongoDB ObjectId or raw scalar into a string identifier.
+
+    Args:
+        val: Unique ID value, either ObjectId, string, or None.
+
+    Returns:
+        String identifier representation.
+    """
+    if isinstance(val, ObjectId):
         return str(val)
     return str(val) if val is not None else str(uuid4())
 
@@ -27,7 +36,12 @@ def _format_id(val: Any) -> str:
 class SupabaseCursor:
     """Cursor wrapper for Supabase queries supporting sort, skip, limit, and async iteration."""
 
-    def __init__(self, data: list[dict[str, Any]]):
+    def __init__(self, data: list[dict[str, Any]]) -> None:
+        """Initialize in-memory cursor with document list.
+
+        Args:
+            data: Raw document dictionaries returned by storage.
+        """
         self._data = data
         self._skip = 0
         self._limit = len(data)
@@ -35,6 +49,16 @@ class SupabaseCursor:
         self._sort_reverse: bool = False
 
     def sort(self, key_or_list: Any, direction: int = 1) -> SupabaseCursor:
+        """Apply sorting key and direction to the cursor.
+
+        Args:
+            key_or_list: Sort attribute name or list of (key, direction) tuples.
+            direction: 1 for ascending sort, -1 for descending sort.
+
+        Returns:
+            Self cursor reference for chaining.
+        """
+        # Parse MongoDB tuple format or direct string field name.
         if isinstance(key_or_list, list) and key_or_list:
             key, direction = key_or_list[0]
             self._sort_key = key
@@ -45,14 +69,35 @@ class SupabaseCursor:
         return self
 
     def skip(self, count: int) -> SupabaseCursor:
+        """Set number of records to skip for pagination.
+
+        Args:
+            count: Number of initial records to skip.
+
+        Returns:
+            Self cursor reference for chaining.
+        """
         self._skip = count
         return self
 
     def limit(self, count: int) -> SupabaseCursor:
+        """Set maximum number of records to return.
+
+        Args:
+            count: Maximum record count.
+
+        Returns:
+            Self cursor reference for chaining.
+        """
         self._limit = count
         return self
 
     def _execute(self) -> list[dict[str, Any]]:
+        """Slice and sort internal document list according to cursor options.
+
+        Returns:
+            Processed list of document dictionaries.
+        """
         res = list(self._data)
         if self._sort_key:
             res.sort(
@@ -63,50 +108,108 @@ class SupabaseCursor:
         end = start + self._limit
         return res[start:end]
 
-    def __aiter__(self):
+    def __aiter__(self) -> SupabaseCursor:
+        """Begin asynchronous iteration over results.
+
+        Returns:
+            Self cursor reference.
+        """
         self._iter_data = iter(self._execute())
         return self
 
     async def __anext__(self) -> dict[str, Any]:
+        """Fetch next document from the cursor.
+
+        Returns:
+            Next document dictionary.
+
+        Raises:
+            StopAsyncIteration: When no further documents remain.
+        """
         try:
             return next(self._iter_data)
         except StopIteration:
-            raise StopAsyncIteration
+            raise StopAsyncIteration from None
 
 
 class InsertResult:
-    def __init__(self, inserted_id: Any):
+    """Result object returned from insert_one operations."""
+
+    def __init__(self, inserted_id: Any) -> None:
+        """Initialize insertion result with created identifier.
+
+        Args:
+            inserted_id: Created document identifier.
+        """
         self.inserted_id = inserted_id
 
 
 class DeleteResult:
-    def __init__(self, deleted_count: int):
+    """Result object returned from delete_one operations."""
+
+    def __init__(self, deleted_count: int) -> None:
+        """Initialize deletion result with modified row count.
+
+        Args:
+            deleted_count: Number of deleted rows.
+        """
         self.deleted_count = deleted_count
 
 
 class UpdateResult:
-    def __init__(self, modified_count: int):
+    """Result object returned from update_one operations."""
+
+    def __init__(self, modified_count: int) -> None:
+        """Initialize update result with modified row count.
+
+        Args:
+            modified_count: Number of modified rows.
+        """
         self.modified_count = modified_count
 
 
 class SupabaseCollection:
     """Collection wrapper that writes to Supabase table or in-memory fallback."""
 
-    def __init__(self, table_name: str, supabase_client: Client | None, memory_collection: Any):
+    def __init__(
+        self,
+        table_name: str,
+        supabase_client: Client | None,
+        memory_collection: Any,
+    ) -> None:
+        """Initialize collection adapter with live Supabase client and fallback cache.
+
+        Args:
+            table_name: Target Postgres table name.
+            supabase_client: Authenticated Supabase client or None.
+            memory_collection: In-memory collection handle.
+        """
         self.table_name = table_name
         self.client = supabase_client
         self.memory = memory_collection
 
     @property
     def is_live_supabase(self) -> bool:
+        """Check if active cloud connection exists.
+
+        Returns:
+            True if client is connected to Supabase cloud, otherwise False.
+        """
         return self.client is not None
 
     def _clean_doc_for_supabase(self, doc: dict[str, Any]) -> dict[str, Any]:
+        """Sanitize document fields for PostgREST JSON serialization.
+
+        Args:
+            doc: Raw Python document.
+
+        Returns:
+            Sanitized dictionary ready for Supabase insertion.
+        """
         cleaned = dict(doc)
-        # Ensure 'id' exists and '_id' is string
         raw_id = cleaned.pop("_id", None) or cleaned.get("id") or str(uuid4())
         cleaned["id"] = _format_id(raw_id)
-        # Serialize datetimes to ISO format for JSON/PostgREST
+        # Convert datetime objects to ISO strings for PostgREST compatibility.
         for k, v in list(cleaned.items()):
             if isinstance(v, datetime):
                 cleaned[k] = v.isoformat()
@@ -115,6 +218,14 @@ class SupabaseCollection:
         return cleaned
 
     def _restore_id(self, doc: dict[str, Any]) -> dict[str, Any]:
+        """Ensure both 'id' and '_id' keys exist for caller compatibility.
+
+        Args:
+            doc: Document dictionary from Supabase.
+
+        Returns:
+            Dictionary with synchronized id and _id fields.
+        """
         res = dict(doc)
         if "id" in res and "_id" not in res:
             res["_id"] = res["id"]
@@ -123,6 +234,14 @@ class SupabaseCollection:
         return res
 
     async def insert_one(self, doc: dict[str, Any]) -> InsertResult:
+        """Insert a single document into Supabase and local cache.
+
+        Args:
+            doc: Document payload dictionary.
+
+        Returns:
+            InsertResult containing created document identifier.
+        """
         if not self.is_live_supabase:
             res = await self.memory.insert_one(doc)
             return InsertResult(res.inserted_id)
@@ -130,23 +249,32 @@ class SupabaseCollection:
         clean = self._clean_doc_for_supabase(doc)
         loop = asyncio.get_running_loop()
         try:
+            # Dispatch synchronous PostgREST call to thread pool to avoid blocking async loop.
             await loop.run_in_executor(
-                None, lambda: self.client.table(self.table_name).insert(clean).execute()
+                None,
+                lambda: self.client.table(self.table_name).insert(clean).execute(),
             )
-            # Keep memory cache in sync
             await self.memory.insert_one(dict(clean, _id=clean["id"]))
             return InsertResult(clean["id"])
         except Exception:
-            # Fall back to memory on Supabase network failure
+            # Fall back to local memory if remote network fails.
             res = await self.memory.insert_one(doc)
             return InsertResult(res.inserted_id)
 
     async def find_one(self, filter_query: dict[str, Any]) -> dict[str, Any] | None:
+        """Find a single document matching criteria.
+
+        Args:
+            filter_query: Query criteria dictionary.
+
+        Returns:
+            Matching document or None if not found.
+        """
         if not self.is_live_supabase:
             doc = await self.memory.find_one(filter_query)
             return self._restore_id(doc) if doc else None
 
-        # Check by ID directly
+        # Query directly by primary key when filter contains id.
         doc_id = filter_query.get("_id") or filter_query.get("id")
         if doc_id:
             str_id = _format_id(doc_id)
@@ -154,23 +282,45 @@ class SupabaseCollection:
             try:
                 res = await loop.run_in_executor(
                     None,
-                    lambda: self.client.table(self.table_name).select("*").eq("id", str_id).execute(),
+                    lambda: (
+                        self.client.table(self.table_name).select("*").eq("id", str_id).execute()
+                    ),
                 )
                 if res.data and len(res.data) > 0:
                     return self._restore_id(res.data[0])
             except Exception:
                 pass
 
-        # Fall back to memory
+        # Fall back to in-memory store for complex filters.
         doc = await self.memory.find_one(filter_query)
         return self._restore_id(doc) if doc else None
 
     def find(self, filter_query: dict[str, Any] | None = None) -> Any:
-        # Use memory cursor for rich MongoDB filter compatibility (e.g. $lte, $or, $regex)
-        # and sync with Supabase records on background
+        """Execute query across records.
+
+        Args:
+            filter_query: Optional criteria dictionary.
+
+        Returns:
+            Cursor supporting pagination and sorting.
+        """
+        # Delegate to memory collection for rich MongoDB operator support.
         return self.memory.find(filter_query or {})
 
-    async def update_one(self, filter_query: dict[str, Any], update: dict[str, Any]) -> UpdateResult:
+    async def update_one(
+        self,
+        filter_query: dict[str, Any],
+        update: dict[str, Any],
+    ) -> UpdateResult:
+        """Update a single document matching query.
+
+        Args:
+            filter_query: Selection criteria dictionary.
+            update: Mutation operations dictionary.
+
+        Returns:
+            UpdateResult with modified document count.
+        """
         res = await self.memory.update_one(filter_query, update)
         if self.is_live_supabase:
             doc_id = filter_query.get("_id") or filter_query.get("id")
@@ -179,35 +329,51 @@ class SupabaseCollection:
                 clean_updates = self._clean_doc_for_supabase(update["$set"])
                 clean_updates.pop("id", None)
                 loop = asyncio.get_running_loop()
-                try:
+                with contextlib.suppress(Exception):
                     await loop.run_in_executor(
                         None,
-                        lambda: self.client.table(self.table_name)
-                        .update(clean_updates)
-                        .eq("id", str_id)
-                        .execute(),
+                        lambda: (
+                            self.client.table(self.table_name)
+                            .update(clean_updates)
+                            .eq("id", str_id)
+                            .execute()
+                        ),
                     )
-                except Exception:
-                    pass
         return UpdateResult(res.modified_count if hasattr(res, "modified_count") else 1)
 
     async def delete_one(self, filter_query: dict[str, Any]) -> DeleteResult:
+        """Delete a single document matching query.
+
+        Args:
+            filter_query: Selection criteria dictionary.
+
+        Returns:
+            DeleteResult with deleted document count.
+        """
         res = await self.memory.delete_one(filter_query)
         if self.is_live_supabase:
             doc_id = filter_query.get("_id") or filter_query.get("id")
             if doc_id:
                 str_id = _format_id(doc_id)
                 loop = asyncio.get_running_loop()
-                try:
+                with contextlib.suppress(Exception):
                     await loop.run_in_executor(
                         None,
-                        lambda: self.client.table(self.table_name).delete().eq("id", str_id).execute(),
+                        lambda: (
+                            self.client.table(self.table_name).delete().eq("id", str_id).execute()
+                        ),
                     )
-                except Exception:
-                    pass
         return DeleteResult(res.deleted_count if hasattr(res, "deleted_count") else 1)
 
     async def count_documents(self, filter_query: dict[str, Any] | None = None) -> int:
+        """Count total documents matching criteria.
+
+        Args:
+            filter_query: Optional selection criteria.
+
+        Returns:
+            Total count of matching documents.
+        """
         return await self.memory.count_documents(filter_query or {})
 
 
@@ -220,6 +386,11 @@ class SupabaseClientManager:
 
     @classmethod
     def get_memory_db(cls) -> Any:
+        """Get or initialize in-memory database mock.
+
+        Returns:
+            Async in-memory MongoDB client handle.
+        """
         if cls._memory_db is None:
             from mongomock_motor import AsyncMongoMockClient
 
@@ -228,19 +399,33 @@ class SupabaseClientManager:
 
     @classmethod
     def get_supabase_client(cls) -> Client | None:
-        if cls._supabase_client is None:
-            if settings.supabase_url and settings.supabase_key:
-                try:
-                    cls._supabase_client = create_client(
-                        settings.supabase_url, settings.supabase_key
-                    )
-                except Exception as exc:
-                    print(f"Supabase connection warning: {exc}")
-                    cls._supabase_client = None
+        """Get or create singleton Supabase client.
+
+        Returns:
+            Authenticated Supabase Client or None.
+        """
+        # Connect to Supabase when URL and credentials are both configured.
+        if cls._supabase_client is None and settings.supabase_url and settings.supabase_key:
+            try:
+                cls._supabase_client = create_client(
+                    settings.supabase_url,
+                    settings.supabase_key,
+                )
+            except Exception as exc:
+                print(f"Supabase connection warning: {exc}")
+                cls._supabase_client = None
         return cls._supabase_client
 
     @classmethod
     def get_collection(cls, name: str) -> SupabaseCollection:
+        """Retrieve wrapped collection adapter by table name.
+
+        Args:
+            name: Postgres table or collection name.
+
+        Returns:
+            Configured SupabaseCollection adapter.
+        """
         if name not in cls._collections:
             sb = cls.get_supabase_client()
             mem = cls.get_memory_db()[name]
@@ -249,24 +434,36 @@ class SupabaseClientManager:
 
     @classmethod
     def reset(cls) -> None:
+        """Reset cached client connection and collections after settings change."""
         cls._supabase_client = None
         cls._collections.clear()
 
     @classmethod
     async def ping(cls) -> bool:
+        """Check if Supabase cloud database responds.
+
+        Returns:
+            True if cloud or in-memory database is operational, otherwise False.
+        """
         sb = cls.get_supabase_client()
         if sb is not None:
             try:
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(
-                    None, lambda: sb.table("recipes").select("id").limit(1).execute()
+                    None,
+                    lambda: sb.table("recipes").select("id").limit(1).execute(),
                 )
                 return True
             except Exception:
                 return False
-        # When no Supabase keys are set, in-memory store is always ready
+        # In-memory store is always ready when no credentials are provided.
         return True
 
     @classmethod
     def is_configured(cls) -> bool:
+        """Check if valid Supabase cloud credentials are set.
+
+        Returns:
+            True if project URL and key are configured, otherwise False.
+        """
         return bool(settings.supabase_url and settings.supabase_key)

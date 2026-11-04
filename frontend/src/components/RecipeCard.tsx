@@ -1,3 +1,8 @@
+/**
+ * Recipe card component for the vault grid view.
+ * Displays title, dietary pill, hero image, preparation time, and quick view toggles.
+ */
+
 import React, { useState } from 'react'
 import {
   Clock,
@@ -13,25 +18,46 @@ import {
 } from 'lucide-react'
 import type { Recipe } from '../types'
 
+/**
+ * Properties for RecipeCard component.
+ */
 interface RecipeCardProps {
+  /** Recipe document to render. */
   recipe: Recipe
+  /** Callback to trigger recipe deletion. */
   onDelete: (id: string) => void
+  /** Callback to open dedicated full-page recipe view. */
   onSelect?: (recipe: Recipe) => void
 }
 
+/**
+ * Interactive card displaying summary metrics, serving scaler, and ingredient checklist.
+ *
+ * @param props - Component properties.
+ * @returns Recipe card JSX element.
+ */
 export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSelect }) => {
+  // Toggle inline expanded view without leaving the main vault grid.
   const [expanded, setExpanded] = useState(false)
+
+  // Serving scaling factor (0.5x, 1x, 2x, 4x) for real-time ingredient quantity adjustments.
   const [servingMultiplier, setServingMultiplier] = useState(1)
+
+  // Track checked ingredients locally during active kitchen preparation.
   const [checkedIngredients, setCheckedIngredients] = useState<Record<number, boolean>>({})
 
+  // Resolve recipe ID handling MongoDB (_id) and Supabase (id) naming conventions.
   const recipeId = recipe.id || recipe._id || ''
   const baseServings = recipe.servings || 2
   const scaledServings = Math.round(baseServings * servingMultiplier * 10) / 10
 
+  // Toggle strikethrough state on ingredients as user prepares items.
   const toggleCheck = (idx: number) => {
     setCheckedIngredients((prev) => ({ ...prev, [idx]: !prev[idx] }))
   }
 
+  // Confirm before deletion to prevent accidental loss of recipes.
+  // Stop click propagation so opening the delete dialog does not trigger card selection.
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (window.confirm(`Delete "${recipe.title}" from recipe vault?`)) {
@@ -42,7 +68,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
   return (
     <div className="bg-slate-900/90 rounded-2xl shadow-sm border border-slate-800 overflow-hidden hover:border-slate-700 transition-all flex flex-col justify-between group">
       <div>
-        {/* Card Image Banner */}
+        {/* Hero image banner with calorie badge overlay */}
         {recipe.image_url ? (
           <div
             onClick={() => onSelect?.(recipe)}
@@ -53,6 +79,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
               alt={recipe.title}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             />
+            {/* Subtle gradient overlay to enhance title legibility against bright photos */}
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/40 to-transparent" />
             {recipe.nutrition?.calories && (
               <div className="absolute bottom-2.5 right-2.5 flex items-center space-x-1 bg-slate-950/80 backdrop-blur-sm text-orange-400 border border-orange-500/30 px-2.5 py-1 rounded-xl text-xs font-bold shadow-md">
@@ -61,18 +88,16 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
               </div>
             )}
           </div>
-        ) : (
-          recipe.nutrition?.calories ? (
-            <div className="pt-4 px-6 flex justify-end">
-              <span className="flex items-center space-x-1 bg-slate-950/70 text-orange-400 border border-orange-500/30 px-2.5 py-0.5 rounded-xl text-xs font-bold">
-                <Flame className="w-3 h-3" />
-                <span>{recipe.nutrition.calories} kcal</span>
-              </span>
-            </div>
-          ) : null
-        )}
+        ) : recipe.nutrition?.calories ? (
+          <div className="pt-4 px-6 flex justify-end">
+            <span className="flex items-center space-x-1 bg-slate-950/70 text-orange-400 border border-orange-500/30 px-2.5 py-0.5 rounded-xl text-xs font-bold">
+              <Flame className="w-3 h-3" />
+              <span>{recipe.nutrition.calories} kcal</span>
+            </span>
+          </div>
+        ) : null}
 
-        {/* Header */}
+        {/* Card header with dietary tag, regional badge, and title */}
         <div className="p-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 cursor-pointer" onClick={() => onSelect?.(recipe)}>
@@ -94,9 +119,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
                   </span>
                 )}
                 {recipe.difficulty && (
-                  <span className="text-xs font-medium text-slate-400">
-                    • {recipe.difficulty}
-                  </span>
+                  <span className="text-xs font-medium text-slate-400">• {recipe.difficulty}</span>
                 )}
               </div>
 
@@ -117,7 +140,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
             </button>
           </div>
 
-          {/* Info Grid */}
+          {/* Quick metrics grid: Total Cooking Time, Portions, Ingredient Count */}
           <div className="grid grid-cols-3 gap-2 mt-4 text-xs text-slate-300 bg-slate-950/60 border border-slate-800/80 p-2.5 rounded-xl">
             <div className="flex items-center space-x-1.5">
               <Clock className="w-3.5 h-3.5 text-orange-400" />
@@ -133,7 +156,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
             </div>
           </div>
 
-          {/* Action Row */}
+          {/* Action Row: dedicated page navigation and inline accordion toggle */}
           <div className="grid grid-cols-2 gap-2 mt-4">
             <button
               onClick={() => onSelect?.(recipe)}
@@ -154,10 +177,10 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
         </div>
       </div>
 
-      {/* Expanded Quick Details */}
+      {/* Expanded Quick Details Drawer */}
       {expanded && (
         <div className="p-6 pt-0 border-t border-slate-800 bg-slate-950/40">
-          {/* Serving Scaler */}
+          {/* Real-time Serving Scaler Buttons */}
           <div className="flex items-center justify-between py-3 border-b border-slate-800 mb-4">
             <span className="text-xs font-semibold text-slate-300">Scale Ingredients:</span>
             <div className="flex space-x-1">
@@ -177,14 +200,16 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
             </div>
           </div>
 
-          {/* Ingredients Checklist */}
+          {/* Interactive ingredient checklist with strikethrough */}
           <div className="mb-6">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
               Ingredients ({recipe.ingredients.length})
             </h4>
             <div className="space-y-1.5">
               {recipe.ingredients.map((ing, idx) => {
-                const scaledQty = ing.quantity ? (ing.quantity * servingMultiplier).toFixed(1).replace(/\.0$/, '') : null
+                const scaledQty = ing.quantity
+                  ? (ing.quantity * servingMultiplier).toFixed(1).replace(/\.0$/, '')
+                  : null
                 const isChecked = !!checkedIngredients[idx]
 
                 return (
@@ -208,7 +233,8 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
 
                     {(scaledQty || ing.unit) && (
                       <span className="text-xs font-mono text-slate-400 bg-slate-900 border border-slate-800 px-2 py-0.5 rounded">
-                        {scaledQty ? `${scaledQty} ` : ''}{ing.unit || ''}
+                        {scaledQty ? `${scaledQty} ` : ''}
+                        {ing.unit || ''}
                       </span>
                     )}
                   </div>
@@ -217,7 +243,7 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
             </div>
           </div>
 
-          {/* Steps */}
+          {/* Step-by-step instructions */}
           <div>
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
               Instructions ({recipe.steps.length} Steps)
@@ -246,3 +272,5 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
     </div>
   )
 }
+
+export default RecipeCard

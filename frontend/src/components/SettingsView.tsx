@@ -21,36 +21,50 @@ import {
 import type { SettingsStatus } from '../types'
 import { fetchSettingsStatus, updateSettings } from '../api'
 
+/**
+ * Properties for the SettingsView component.
+ */
 interface SettingsViewProps {
+  /** Optional callback triggered after successful configuration updates. */
   onSettingsUpdated?: () => void
 }
 
+/**
+ * SettingsView manages database connection credentials and AI API keys.
+ *
+ * @param props - Component configuration and change notifications.
+ * @returns Rendered React element containing settings forms and connection diagnostics.
+ */
 export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated }) => {
+  // Store the active system configuration returned by the backend.
   const [status, setStatus] = useState<SettingsStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
-  // Supabase fields
+  // Manage Supabase project URL and secret service credentials.
   const [supabaseUrl, setSupabaseUrl] = useState('')
   const [supabaseKey, setSupabaseKey] = useState('')
   const [showSupabaseKey, setShowSupabaseKey] = useState(false)
   const [showSqlGuide, setShowSqlGuide] = useState(false)
   const [copiedSql, setCopiedSql] = useState(false)
 
-  // AI BYOK fields
+  // Manage Bring-Your-Own-Key credentials for supported AI model providers.
   const [geminiKey, setGeminiKey] = useState('')
   const [geminiModel, setGeminiModel] = useState('gemini-2.5-flash')
   const [anthropicKey, setAnthropicKey] = useState('')
   const [openaiKey, setOpenAIKey] = useState('')
   const [voyageKey, setVoyageKey] = useState('')
 
-  // Show/hide toggles
+  // Control masked password visibility to protect secrets during screen sharing.
   const [showGemini, setShowGemini] = useState(false)
   const [showAnthropic, setShowAnthropic] = useState(false)
   const [showOpenAI, setShowOpenAI] = useState(false)
   const [showVoyage, setShowVoyage] = useState(false)
 
+  /**
+   * Loads current settings configuration and masked credentials from the backend.
+   */
   const loadStatus = async () => {
     setLoading(true)
     try {
@@ -66,15 +80,22 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
     }
   }
 
+  // Load existing configuration once on component mount to populate status badges.
   useEffect(() => {
-    loadStatus()
+    void loadStatus()
   }, [])
 
+  /**
+   * Validates and submits updated credentials to the server.
+   *
+   * @param e - Form submission event.
+   */
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setMessage(null)
 
+    // Build sparse payload so untouched credentials are not overwritten with empty strings.
     const payload: {
       supabase_url?: string
       supabase_key?: string
@@ -100,6 +121,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
         type: 'success',
         text: 'Configuration successfully saved! Settings are active in memory & saved to .env',
       })
+      // Clear sensitive plain-text input fields from memory after saving.
       setSupabaseKey('')
       setGeminiKey('')
       setAnthropicKey('')
@@ -114,7 +136,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
     }
   }
 
+  /**
+   * Copies the Supabase SQL schema to the user clipboard for quick database initialization.
+   */
   const handleCopySql = () => {
+    // Provide embedded DDL script so users can bootstrap tables without finding repo files.
     const sql = `-- Supabase Schema for Iðunn
 create table if not exists items (
     id text primary key,
@@ -179,6 +205,7 @@ create policy "Allow all on items" on items for all using (true) with check (tru
 create policy "Allow all on ingredients" on ingredients for all using (true) with check (true);
 create policy "Allow all on recipes" on recipes for all using (true) with check (true);`
 
+    // Write schema string directly to system clipboard for one-click setup.
     navigator.clipboard.writeText(sql)
     setCopiedSql(true)
     setTimeout(() => setCopiedSql(false), 2000)
@@ -186,7 +213,7 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
-      {/* Header */}
+      {/* Header gives system overview and cloud persistence mode indicator. */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <div className="flex items-center space-x-2">
@@ -203,7 +230,7 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
         </div>
 
         <button
-          onClick={loadStatus}
+          onClick={() => void loadStatus()}
           disabled={loading}
           title="Refresh status"
           className="p-2.5 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors self-start sm:self-auto cursor-pointer"
@@ -212,10 +239,10 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
         </button>
       </div>
 
-      {/* Database & Provider Status Overview */}
+      {/* Status tiles show connection states for cloud database and active AI model. */}
       {status && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-          {/* Database Status */}
+          {/* Inform user whether database persistence is using cloud Supabase or fallback RAM. */}
           <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -241,7 +268,7 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
             </p>
           </div>
 
-          {/* Gemini AI Status */}
+          {/* Gemini AI status tile shows whether key is configured and provides masked view. */}
           <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -272,7 +299,7 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
             <p className="text-xs text-slate-500 mt-2">Free tier via Google AI Studio</p>
           </div>
 
-          {/* Active Provider */}
+          {/* Display active extraction engine selected from configured providers. */}
           <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
@@ -281,20 +308,22 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
               <Cpu className="w-4 h-4 text-orange-400" />
             </div>
             <div className="text-sm font-bold text-slate-100 capitalize">
-              {status.active_llm_provider !== 'none' ? status.active_llm_provider : 'None configured'}
+              {status.active_llm_provider !== 'none'
+                ? status.active_llm_provider
+                : 'None configured'}
             </div>
             <p className="text-xs text-slate-500 mt-1">
               {status.active_llm_provider === 'gemini'
                 ? `Using ${status.gemini_model}`
                 : status.active_llm_provider === 'anthropic'
-                ? 'Using Claude Haiku'
-                : 'Add Gemini key to extract recipes'}
+                  ? 'Using Claude Haiku'
+                  : 'Add Gemini key to extract recipes'}
             </p>
           </div>
         </div>
       )}
 
-      {/* Alert Messages */}
+      {/* Render alert messages when credentials save succeeds or fails. */}
       {message && (
         <div
           className={`flex items-center space-x-2 text-sm p-4 rounded-xl border mb-6 ${
@@ -312,9 +341,9 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
         </div>
       )}
 
-      {/* Main Settings Form */}
+      {/* Form collects credentials for Supabase Postgres and AI models. */}
       <form onSubmit={handleSave} className="space-y-6">
-        {/* Supabase Database Card */}
+        {/* Supabase card configuration for cloud database tables. */}
         <div className="bg-slate-900/90 border-2 border-emerald-500/30 rounded-2xl p-6 shadow-sm relative overflow-hidden">
           <div className="absolute top-0 right-0 px-3 py-1 bg-gradient-to-l from-emerald-500 to-teal-500 text-white text-xs font-bold rounded-bl-xl shadow-sm">
             Cloud NoSQL Database
@@ -327,7 +356,8 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
             <div>
               <h2 className="text-lg font-bold text-slate-100">Supabase Cloud Database</h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Stores your recipes, pantry items, and ingredients in Postgres JSONB with automatic backup and zero local daemons.
+                Stores your recipes, pantry items, and ingredients in Postgres JSONB with automatic
+                backup and zero local daemons.
               </p>
             </div>
           </div>
@@ -373,7 +403,7 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
             </div>
           </div>
 
-          {/* Quick Setup Instructions Collapsible */}
+          {/* Collapsible guide shows schema creation steps to remove documentation friction. */}
           <div className="pt-2 border-t border-slate-800/80">
             <button
               type="button"
@@ -405,7 +435,10 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
                   <li>
                     In your Supabase dashboard, open the <strong>SQL Editor</strong> in the left sidebar.
                   </li>
-                  <li>Click below to copy the tables SQL script and paste it into the SQL Editor, then click <strong>Run</strong>:</li>
+                  <li>
+                    Click below to copy the tables SQL script and paste it into the SQL Editor, then
+                    click <strong>Run</strong>:
+                  </li>
                 </ol>
 
                 <div className="flex items-center space-x-3 pt-1">
@@ -423,14 +456,15 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
                 </div>
 
                 <p className="text-slate-400 pt-1">
-                  4. Finally, go to <strong>Project Settings &gt; API</strong>, copy your <strong>Project URL</strong> and <strong>anon key</strong>, and paste them above!
+                  4. Finally, go to <strong>Project Settings &gt; API</strong>, copy your{' '}
+                  <strong>Project URL</strong> and <strong>anon key</strong>, and paste them above!
                 </p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Gemini Provider Card (Highlighted) */}
+        {/* Gemini Provider card provides free-tier multimodal AI extraction. */}
         <div className="bg-slate-900/90 border-2 border-orange-500/30 rounded-2xl p-6 shadow-sm relative overflow-hidden">
           <div className="absolute top-0 right-0 px-3 py-1 bg-gradient-to-l from-orange-500 to-amber-500 text-white text-xs font-bold rounded-bl-xl shadow-sm">
             Recommended • 100% Free Tier
@@ -443,7 +477,8 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
             <div>
               <h2 className="text-lg font-bold text-slate-100">Google Gemini BYOK</h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Powers video reel keyframe sampling, voice note transcription, photo OCR, and text parsing with zero API bills.
+                Powers video reel keyframe sampling, voice note transcription, photo OCR, and text
+                parsing with zero API bills.
               </p>
             </div>
           </div>
@@ -505,7 +540,7 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
           </div>
         </div>
 
-        {/* Anthropic Claude Card */}
+        {/* Anthropic Claude card offers alternative high-accuracy text extraction. */}
         <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-6 shadow-sm">
           <div className="flex items-start space-x-3 mb-4">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
@@ -546,9 +581,8 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
           </div>
         </div>
 
-        {/* Voyage AI & OpenAI Card */}
+        {/* OpenAI and Voyage AI providers allow custom embedding and fallback options. */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* OpenAI */}
           <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-5 shadow-sm">
             <h2 className="text-sm font-bold text-slate-100 mb-1">OpenAI API Key</h2>
             <p className="text-xs text-slate-400 mb-3">Optional fallback provider.</p>
@@ -574,7 +608,6 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
             </div>
           </div>
 
-          {/* Voyage AI */}
           <div className="bg-slate-900/90 border border-slate-800/80 rounded-2xl p-5 shadow-sm">
             <h2 className="text-sm font-bold text-slate-100 mb-1">Voyage AI (Embeddings)</h2>
             <p className="text-xs text-slate-400 mb-3">
@@ -603,15 +636,17 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
           </div>
         </div>
 
-        {/* Security / Architecture Note */}
+        {/* Security badge assures user keys are never transmitted to third-party telemetry. */}
         <div className="flex items-start space-x-3 bg-slate-900/40 border border-slate-800 rounded-xl p-4 text-xs text-slate-400">
           <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
           <p className="leading-relaxed">
-            <strong className="text-slate-300">Privacy & Security:</strong> Your keys are stored locally on your machine in <code className="text-orange-400 font-mono">.env</code> and loaded directly into Iðunn&apos;s runtime memory.
+            <strong className="text-slate-300">Privacy & Security:</strong> Your keys are stored
+            locally on your machine in <code className="text-orange-400 font-mono">.env</code> and
+            loaded directly into Iðunn&apos;s runtime memory.
           </p>
         </div>
 
-        {/* Submit Button */}
+        {/* Submit button locks in changes and initiates background persistence. */}
         <div className="flex items-center justify-end space-x-3 pt-2">
           <button
             type="submit"

@@ -11,17 +11,47 @@ import {
 import type { InventoryCreate, InventoryItem } from '../types'
 import { createInventoryItem, deleteInventoryItem } from '../api'
 
+/**
+ * Properties for the PantryView component.
+ */
 interface PantryViewProps {
+  /** Array of tracked inventory stock items. */
   items: InventoryItem[]
+  /** Indicates whether an active network fetch is running. */
   loading: boolean
+  /** Callback to trigger an asynchronous reload of pantry items. */
   onRefresh: () => void
+  /** Callback invoked when a new item is created and saved. */
   onItemAdded: (item: InventoryItem) => void
+  /** Callback invoked when an item is deleted from inventory. */
   onItemDeleted: (id: string) => void
 }
 
+// Track valid storage locations so items are organized into distinct household zones.
 const LOCATIONS = ['fridge', 'pantry', 'freezer', 'cabinet', 'spice_box', 'counter']
-const UNITS = ['g', 'kg', 'paav', 'ml', 'l', 'tsp', 'tbsp', 'chamcha', 'katori', 'piece', 'bunch', 'packet']
 
+// Support both standard metric units and Indian culinary volumetric measures.
+const UNITS = [
+  'g',
+  'kg',
+  'paav',
+  'ml',
+  'l',
+  'tsp',
+  'tbsp',
+  'chamcha',
+  'katori',
+  'piece',
+  'bunch',
+  'packet',
+]
+
+/**
+ * PantryView renders the kitchen inventory dashboard and item management interface.
+ *
+ * @param props - Component configuration and mutation handlers.
+ * @returns Rendered React element displaying pantry items and creation dialogs.
+ */
 export const PantryView: React.FC<PantryViewProps> = ({
   items,
   loading,
@@ -29,24 +59,32 @@ export const PantryView: React.FC<PantryViewProps> = ({
   onItemAdded,
   onItemDeleted,
 }) => {
+  // Modal visibility state controls the new item entry form.
   const [showAddModal, setShowAddModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Form State
+  // Manage form fields locally to keep input updates responsive.
   const [name, setName] = useState('')
   const [quantity, setQuantity] = useState('1')
   const [unit, setUnit] = useState('piece')
   const [location, setLocation] = useState('fridge')
   const [expiryDate, setExpiryDate] = useState('')
 
+  /**
+   * Persists a new inventory item to the backend database.
+   *
+   * @param e - Form submission event.
+   */
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Reject empty ingredient names to prevent corrupted inventory rows.
     if (!name.trim()) return
 
     setSubmitting(true)
     setError(null)
     try {
+      // Normalize dates to ISO format so timezones do not cause date drift.
       const payload: InventoryCreate = {
         name: name.trim(),
         quantity: parseFloat(quantity) || 1,
@@ -56,6 +94,8 @@ export const PantryView: React.FC<PantryViewProps> = ({
       }
       const newItem = await createInventoryItem(payload)
       onItemAdded(newItem)
+
+      // Reset form fields after success so subsequent entries start clean.
       setName('')
       setQuantity('1')
       setExpiryDate('')
@@ -67,7 +107,14 @@ export const PantryView: React.FC<PantryViewProps> = ({
     }
   }
 
+  /**
+   * Removes an item from the database after explicit confirmation.
+   *
+   * @param id - Unique inventory record identifier.
+   * @param itemName - Item title displayed in confirmation prompt.
+   */
   const handleDelete = async (id: string, itemName: string) => {
+    // Require user confirmation to protect against accidental single-click deletions.
     if (window.confirm(`Remove "${itemName}" from pantry?`)) {
       try {
         await deleteInventoryItem(id)
@@ -80,7 +127,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6">
-      {/* Header */}
+      {/* Render top header with live inventory statistics and primary actions. */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-extrabold text-slate-100 tracking-tight">Kitchen Pantry</h1>
@@ -89,6 +136,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
           </p>
         </div>
 
+        {/* Buttons allow manual refresh and opening the item entry dialog. */}
         <div className="flex items-center space-x-3">
           <button
             onClick={onRefresh}
@@ -109,7 +157,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
         </div>
       </div>
 
-      {/* Add Item Modal */}
+      {/* Modal dialog isolates item entry and prevents partial background form state. */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
           <div className="bg-slate-900 rounded-2xl p-6 max-w-md w-full shadow-2xl border border-slate-800">
@@ -134,6 +182,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
                 />
               </div>
 
+              {/* Quantity and unit inputs allow fractional amounts for precise kitchen math. */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Quantity</label>
@@ -155,12 +204,15 @@ export const PantryView: React.FC<PantryViewProps> = ({
                     className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
                     {UNITS.map((u) => (
-                      <option key={u} value={u}>{u}</option>
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
                     ))}
                   </select>
                 </div>
               </div>
 
+              {/* Zone storage and expiration fields enable FEFO waste reduction sorting. */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-300 mb-1">Location</label>
@@ -170,12 +222,16 @@ export const PantryView: React.FC<PantryViewProps> = ({
                     className="w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                   >
                     {LOCATIONS.map((loc) => (
-                      <option key={loc} value={loc}>{loc.replace('_', ' ')}</option>
+                      <option key={loc} value={loc}>
+                        {loc.replace('_', ' ')}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">Expiry Date (optional)</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Expiry Date (optional)
+                  </label>
                   <input
                     type="date"
                     value={expiryDate}
@@ -185,6 +241,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
                 </div>
               </div>
 
+              {/* Form buttons prevent double submission when network requests are pending. */}
               <div className="flex items-center justify-end space-x-2 pt-4">
                 <button
                   type="button"
@@ -207,7 +264,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
         </div>
       )}
 
-      {/* Items Grid */}
+      {/* Render inventory cards or display zero-state guidance. */}
       {items.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {items.map((item) => (
@@ -236,6 +293,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
                 </div>
               </div>
 
+              {/* Show storage location and expiration badges for quick inventory assessment. */}
               <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
                 <div className="flex items-center space-x-1">
                   <MapPin className="w-3.5 h-3.5 text-slate-500" />
@@ -259,7 +317,8 @@ export const PantryView: React.FC<PantryViewProps> = ({
           </div>
           <h3 className="text-base font-semibold text-slate-200">Your pantry is empty</h3>
           <p className="text-sm text-slate-400 mt-1 max-w-sm mx-auto">
-            Add items manually or use receipt OCR to automatically log groceries from Blinkit, Zepto, or store bills.
+            Add items manually or use receipt OCR to automatically log groceries from Blinkit,
+            Zepto, or store bills.
           </p>
           <button
             onClick={() => setShowAddModal(true)}

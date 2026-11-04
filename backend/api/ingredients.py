@@ -6,12 +6,10 @@ Supports synonym management and IFCT linkage.
 
 from __future__ import annotations
 
-from typing import Optional
-
+from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
-from ..config import settings
 from ..db import COLLECTION_INGREDIENTS, get_db
 from ..models.ingredient import (
     Ingredient,
@@ -25,17 +23,34 @@ router = APIRouter(prefix="/api/v1/ingredients", tags=["ingredients"])
 
 
 def get_ingredients_collection():
-    """Get the ingredients collection."""
+    """Retrieve the ingredients collection handle from database.
+
+    Returns:
+        Collection adapter for ingredients.
+    """
     return get_db()[COLLECTION_INGREDIENTS]
 
 
 @router.post("", response_model=Ingredient, status_code=status.HTTP_201_CREATED)
 async def create_ingredient(
-    ingredient: IngredientCreate, db: AsyncIOMotorDatabase = Depends(get_db)
-):
-    """Create a new canonical ingredient."""
+    ingredient: IngredientCreate,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Ingredient:
+    """Create a new canonical ingredient in the master database.
+
+    Args:
+        ingredient: Ingredient creation payload.
+        db: Database session injected via dependency.
+
+    Returns:
+        Created Ingredient entity with assigned identifier.
+
+    Raises:
+        HTTPException: If created record cannot be retrieved.
+    """
     collection = db[COLLECTION_INGREDIENTS]
 
+    # Timestamp creation to support audit tracking.
     now = str(int(__import__("time").time()))
     ingredient_dict = ingredient.model_dump()
     ingredient_dict["created_at"] = now
@@ -53,23 +68,36 @@ async def create_ingredient(
 
 @router.get("", response_model=list[Ingredient])
 async def list_ingredients(
-    category: Optional[str] = Query(None, description="Filter by category"),
-    region: Optional[Region] = Query(None, description="Filter by region"),
-    query: Optional[str] = Query(None, description="Search by name/synonym"),
+    category: str | None = Query(None, description="Filter by category"),
+    region: Region | None = Query(None, description="Filter by region"),
+    query: str | None = Query(None, description="Search by name/synonym"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncIOMotorDatabase = Depends(get_db),
-):
-    """List ingredients with optional filters."""
+) -> list[Ingredient]:
+    """List canonical ingredients matching optional search and filter criteria.
+
+    Args:
+        category: Filter by broad category.
+        region: Filter by Indian regional culinary tradition.
+        query: Substring search matching either primary name or synonyms.
+        skip: Offset for pagination.
+        limit: Maximum results count.
+        db: Injected database handle.
+
+    Returns:
+        List of matching Ingredient records.
+    """
     collection = db[COLLECTION_INGREDIENTS]
 
+    # Build MongoDB query criteria dictionary.
     filter_query: dict = {}
     if category:
         filter_query["category"] = category
     if region:
         filter_query["regions"] = region.value
     if query:
-        # Search in name and synonyms
+        # Search both primary name and nested synonyms array using case-insensitive regex.
         filter_query["$or"] = [
             {"name": {"$regex": query, "$options": "i"}},
             {"synonyms.name": {"$regex": query, "$options": "i"}},
@@ -86,17 +114,28 @@ async def list_ingredients(
 
 @router.get("/{ingredient_id}", response_model=Ingredient)
 async def get_ingredient(
-    ingredient_id: str, db: AsyncIOMotorDatabase = Depends(get_db)
-):
-    """Get a specific ingredient by ID."""
-    from bson import ObjectId
+    ingredient_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> Ingredient:
+    """Get a specific ingredient by its unique database identifier.
 
+    Args:
+        ingredient_id: Unique record ID string.
+        db: Injected database handle.
+
+    Returns:
+        Found Ingredient record.
+
+    Raises:
+        HTTPException: If identifier format is invalid or record does not exist.
+    """
     collection = db[COLLECTION_INGREDIENTS]
 
+    # Convert string ID into MongoDB ObjectId.
     try:
         obj_id = ObjectId(ingredient_id)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid ingredient ID")
+        raise HTTPException(status_code=400, detail="Invalid ingredient ID") from None
 
     doc = await collection.find_one({"_id": obj_id})
     if not doc:
@@ -111,24 +150,36 @@ async def update_ingredient(
     ingredient_id: str,
     update: IngredientUpdate,
     db: AsyncIOMotorDatabase = Depends(get_db),
-):
-    """Update an ingredient (partial update)."""
-    from bson import ObjectId
+) -> Ingredient:
+    """Perform partial update on an existing ingredient.
 
+    Args:
+        ingredient_id: Target ingredient ID string.
+        update: Fields to update.
+        db: Injected database handle.
+
+    Returns:
+        Updated Ingredient document.
+
+    Raises:
+        HTTPException: If ID is invalid, payload is empty, or record not found.
+    """
     collection = db[COLLECTION_INGREDIENTS]
 
     try:
         obj_id = ObjectId(ingredient_id)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid ingredient ID")
+        raise HTTPException(status_code=400, detail="Invalid ingredient ID") from None
 
+    # Exclude unset fields so omitted attributes remain intact.
     update_dict = {k: v for k, v in update.model_dump(exclude_none=True).items()}
     if not update_dict:
         raise HTTPException(status_code=400, detail="No fields to update")
 
     update_dict["updated_at"] = str(int(__import__("time").time()))
 
-    changes = {"$set": update_dict}
+    changes: dict = {"$set": update_dict}
+    # Unset vector embeddings when names or synonyms change to invalidate stale vectors.
     if {"name", "synonyms"} & update_dict.keys():
         changes["$unset"] = {"embedding": "", "embedding_model": "", "embedding_text": ""}
 
@@ -150,25 +201,34 @@ async def add_synonym(
     ingredient_id: str,
     synonym: Synonym,
     db: AsyncIOMotorDatabase = Depends(get_db),
-):
-    """Add a synonym to an ingredient."""
-    from bson import ObjectId
+) -> Ingredient:
+    """Add a new synonym or vernacular name to an ingredient.
 
+    Args:
+        ingredient_id: Target ingredient ID string.
+        synonym: Synonym data with name, language, and regional classification.
+        db: Injected database handle.
+
+    Returns:
+        Updated Ingredient document with newly attached synonym.
+
+    Raises:
+        HTTPException: If ID is invalid, synonym already exists, or record missing.
+    """
     collection = db[COLLECTION_INGREDIENTS]
 
     try:
         obj_id = ObjectId(ingredient_id)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid ingredient ID")
+        raise HTTPException(status_code=400, detail="Invalid ingredient ID") from None
 
-    # Check if synonym already exists
-    doc = await collection.find_one(
-        {"_id": obj_id, "synonyms.name": synonym.name}
-    )
+    # Verify synonym name is not duplicated to keep index clean.
+    doc = await collection.find_one({"_id": obj_id, "synonyms.name": synonym.name})
     if doc:
         raise HTTPException(status_code=400, detail="Synonym already exists")
 
     now = str(int(__import__("time").time()))
+    # Push synonym to array and clear embedding to trigger vector regeneration.
     result = await collection.find_one_and_update(
         {"_id": obj_id},
         {
@@ -188,17 +248,27 @@ async def add_synonym(
 
 @router.delete("/{ingredient_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_ingredient(
-    ingredient_id: str, db: AsyncIOMotorDatabase = Depends(get_db)
-):
-    """Delete an ingredient (hard delete)."""
-    from bson import ObjectId
+    ingredient_id: str,
+    db: AsyncIOMotorDatabase = Depends(get_db),
+) -> None:
+    """Hard-delete an ingredient from canonical master database.
 
+    Args:
+        ingredient_id: Unique record ID string to delete.
+        db: Injected database handle.
+
+    Returns:
+        None.
+
+    Raises:
+        HTTPException: If ID format is invalid or ingredient does not exist.
+    """
     collection = db[COLLECTION_INGREDIENTS]
 
     try:
         obj_id = ObjectId(ingredient_id)
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid ingredient ID")
+        raise HTTPException(status_code=400, detail="Invalid ingredient ID") from None
 
     result = await collection.delete_one({"_id": obj_id})
     if result.deleted_count == 0:

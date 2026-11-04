@@ -1,3 +1,8 @@
+/**
+ * Multimodal recipe ingestion component for Iðunn Kitchen OS.
+ * Supports five capture channels: Photos/Cookbooks, Voice Notes, Silent Video Reels, URLs, and Pasted Text.
+ */
+
 import React, { useState, useRef } from 'react'
 import {
   Image as ImageIcon,
@@ -17,33 +22,48 @@ import {
 import type { Recipe } from '../types'
 import { ingestUrl, ingestText, ingestImage, ingestAudio, ingestVideo, createRecipe } from '../api'
 
+/**
+ * Properties for CaptureZone component.
+ */
 interface CaptureZoneProps {
+  /** Callback invoked when a recipe is confirmed and saved to the vault. */
   onRecipeSaved: (recipe: Recipe) => void
+  /** Navigation callback to open the settings view. */
   onNavigateToSettings?: () => void
+  /** Whether the user has at least one AI provider key configured. */
   isByokConfigured?: boolean
 }
 
+/**
+ * Universal recipe capture zone with tabbed stream selectors and live preview.
+ *
+ * @param props - Component properties.
+ * @returns CaptureZone JSX element.
+ */
 export const CaptureZone: React.FC<CaptureZoneProps> = ({
   onRecipeSaved,
   onNavigateToSettings,
   isByokConfigured = true,
 }) => {
+  // Track active input channel. Defaults to 'image' for cookbook/screenshot scanning.
   const [stream, setStream] = useState<'image' | 'audio' | 'video' | 'url' | 'text'>('image')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  // Stream inputs
+  // Maintain separate states for each stream type to preserve user draft inputs across tab switches.
   const [urlInput, setUrlInput] = useState('')
   const [textInput, setTextInput] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
 
-  // Extracted preview
+  // Hold extracted recipe model for pre-commit review before vault persistence.
   const [preview, setPreview] = useState<Recipe | null>(null)
   const [saving, setSaving] = useState(false)
 
+  // Hidden native file input reference to trigger OS file selection dialogs cleanly.
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Capture file selections and clear past error states.
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedFile(e.target.files[0])
@@ -51,6 +71,7 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
     }
   }
 
+  // Dispatch current stream input to corresponding backend extraction endpoint.
   const handleExtract = async () => {
     setLoading(true)
     setError(null)
@@ -59,6 +80,7 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
     try {
       let extracted: Recipe | null = null
 
+      // Route by active stream mode. Validate required inputs before calling network client.
       if (stream === 'url') {
         if (!urlInput.trim()) throw new Error('Please enter a recipe URL')
         extracted = await ingestUrl(urlInput.trim())
@@ -76,6 +98,7 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
         extracted = await ingestVideo(selectedFile)
       }
 
+      // Populate preview card so user can verify ingredients and steps before saving.
       if (extracted) {
         setPreview(extracted)
         setSuccessMsg('Recipe successfully extracted! Review below and save to your vault.')
@@ -88,12 +111,15 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
     }
   }
 
+  // Commit reviewed recipe to vault and notify parent container.
   const handleSaveToVault = async () => {
     if (!preview) return
     setSaving(true)
     setError(null)
     try {
-      const saved = (preview.id || preview._id) ? preview : await createRecipe(preview)
+      // Ingest endpoints already persist records to the database.
+      // Call createRecipe only if ID is missing from manual construction.
+      const saved = preview.id || preview._id ? preview : await createRecipe(preview)
       setSuccessMsg(`"${saved.title}" saved to your vault!`)
       setPreview(null)
       setSelectedFile(null)
@@ -110,23 +136,25 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
-      {/* Title */}
+      {/* Header section explaining multimodal capabilities */}
       <div className="text-center mb-8">
         <h1 className="text-3xl font-extrabold text-slate-100 tracking-tight sm:text-4xl">
           Universal Recipe Ingestion
         </h1>
         <p className="mt-2 text-base text-slate-400 max-w-2xl mx-auto">
-          Capture recipes from any source — cookbook photos, Instagram/TikTok reels, voice notes, WhatsApp messages, or blog URLs.
+          Capture recipes from any source — cookbook photos, Instagram/TikTok reels, voice notes,
+          WhatsApp messages, or blog URLs.
         </p>
       </div>
 
-      {/* BYOK Notice if not configured */}
+      {/* Prominent warning banner when user has not entered BYOK keys */}
       {!isByokConfigured && onNavigateToSettings && (
         <div className="mb-6 p-4 rounded-2xl bg-amber-950/40 border border-amber-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
           <div className="flex items-center space-x-3">
             <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />
             <p className="text-xs sm:text-sm text-amber-200">
-              <strong>BYOK Key Needed:</strong> Add a free Google Gemini key in Settings to extract recipes from reels, photos, and voice notes.
+              <strong>BYOK Key Needed:</strong> Add a free Google Gemini key in Settings to extract
+              recipes from reels, photos, and voice notes.
             </p>
           </div>
           <button
@@ -139,11 +167,16 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
         </div>
       )}
 
-      {/* Stream Tabs */}
+      {/* Five-channel stream selector tabs */}
       <div className="bg-slate-900/90 rounded-2xl shadow-sm border border-slate-800 p-2 mb-6">
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+          {/* Photo / Cookbook Stream */}
           <button
-            onClick={() => { setStream('image'); setSelectedFile(null); setError(null); }}
+            onClick={() => {
+              setStream('image')
+              setSelectedFile(null)
+              setError(null)
+            }}
             className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               stream === 'image'
                 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
@@ -154,8 +187,13 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
             <span>Photo / Book</span>
           </button>
 
+          {/* Voice Note Audio Stream */}
           <button
-            onClick={() => { setStream('audio'); setSelectedFile(null); setError(null); }}
+            onClick={() => {
+              setStream('audio')
+              setSelectedFile(null)
+              setError(null)
+            }}
             className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               stream === 'audio'
                 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
@@ -166,8 +204,13 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
             <span>Voice Note</span>
           </button>
 
+          {/* Silent Video Reel Stream */}
           <button
-            onClick={() => { setStream('video'); setSelectedFile(null); setError(null); }}
+            onClick={() => {
+              setStream('video')
+              setSelectedFile(null)
+              setError(null)
+            }}
             className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               stream === 'video'
                 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
@@ -178,8 +221,12 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
             <span>Reel (1 fps)</span>
           </button>
 
+          {/* Web / YouTube URL Stream */}
           <button
-            onClick={() => { setStream('url'); setError(null); }}
+            onClick={() => {
+              setStream('url')
+              setError(null)
+            }}
             className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               stream === 'url'
                 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
@@ -190,8 +237,12 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
             <span>Recipe URL</span>
           </button>
 
+          {/* Raw Text Stream */}
           <button
-            onClick={() => { setStream('text'); setError(null); }}
+            onClick={() => {
+              setStream('text')
+              setError(null)
+            }}
             className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               stream === 'text'
                 ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
@@ -204,11 +255,13 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
         </div>
       </div>
 
-      {/* Input Card */}
+      {/* Dynamic input card adapting to chosen stream */}
       <div className="bg-slate-900/90 rounded-2xl shadow-sm border border-slate-800 p-6 mb-8">
         {stream === 'image' && (
           <div>
-            <div className="text-sm font-medium text-slate-300 mb-2">Upload Cookbook Photo or Recipe Screenshot</div>
+            <div className="text-sm font-medium text-slate-300 mb-2">
+              Upload Cookbook Photo or Recipe Screenshot
+            </div>
             <div
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
@@ -224,7 +277,9 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
                 <Upload className="w-6 h-6" />
               </div>
               <p className="text-sm font-medium text-slate-200">
-                {selectedFile ? selectedFile.name : 'Click to select or drop cookbook photo / screenshot'}
+                {selectedFile
+                  ? selectedFile.name
+                  : 'Click to select or drop cookbook photo / screenshot'}
               </p>
               <p className="text-xs text-slate-500 mt-1">Supports JPEG, PNG, WebP up to 10 MB</p>
             </div>
@@ -233,7 +288,9 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
 
         {stream === 'audio' && (
           <div>
-            <div className="text-sm font-medium text-slate-300 mb-2">Upload Voice Note or Spoken Recipe Audio</div>
+            <div className="text-sm font-medium text-slate-300 mb-2">
+              Upload Voice Note or Spoken Recipe Audio
+            </div>
             <div
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
@@ -251,14 +308,18 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
               <p className="text-sm font-medium text-slate-200">
                 {selectedFile ? selectedFile.name : 'Click to select audio recording'}
               </p>
-              <p className="text-xs text-slate-500 mt-1">Supports MP3, M4A, WAV, OGG, WebM up to 50 MB</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Supports MP3, M4A, WAV, OGG, WebM up to 50 MB
+              </p>
             </div>
           </div>
         )}
 
         {stream === 'video' && (
           <div>
-            <div className="text-sm font-medium text-slate-300 mb-2">Upload Silent Cooking Reel or Short Video</div>
+            <div className="text-sm font-medium text-slate-300 mb-2">
+              Upload Silent Cooking Reel or Short Video
+            </div>
             <div
               onClick={() => fileInputRef.current?.click()}
               className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
@@ -277,7 +338,8 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
                 {selectedFile ? selectedFile.name : 'Click to select cooking video clip'}
               </p>
               <p className="text-xs text-slate-500 mt-1">
-                Samples 1 frame/sec (up to 15 keyframes) + multimodal OCR. Supports MP4, MOV, WebM up to 100 MB.
+                Samples 1 frame/sec (up to 15 keyframes) + multimodal OCR. Supports MP4, MOV, WebM up
+                to 100 MB.
               </p>
             </div>
           </div>
@@ -298,7 +360,9 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
 
         {stream === 'text' && (
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Pasted Recipe or WhatsApp Forward</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">
+              Pasted Recipe or WhatsApp Forward
+            </label>
             <textarea
               rows={6}
               placeholder="Paste recipe ingredients, method, or WhatsApp message from your family..."
@@ -309,7 +373,7 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
           </div>
         )}
 
-        {/* Action Button & Messages */}
+        {/* Action Button & Status Banners */}
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex-1">
             {error && (
@@ -345,7 +409,7 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
         </div>
       </div>
 
-      {/* Extracted Preview */}
+      {/* Live Extracted Recipe Preview */}
       {preview && (
         <div className="bg-slate-900/90 rounded-2xl shadow-sm border border-slate-800 p-6 sm:p-8 animate-in fade-in duration-300">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
@@ -378,19 +442,24 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
             </button>
           </div>
 
+          {/* Quick stats: prep time, cook time, portions */}
           <div className="grid grid-cols-3 gap-4 mb-6">
             <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex items-center space-x-3">
               <Clock className="w-5 h-5 text-orange-400" />
               <div>
                 <p className="text-xs text-slate-500">Prep Time</p>
-                <p className="text-sm font-semibold text-slate-200">{preview.prep_time_minutes || 0} mins</p>
+                <p className="text-sm font-semibold text-slate-200">
+                  {preview.prep_time_minutes || 0} mins
+                </p>
               </div>
             </div>
             <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex items-center space-x-3">
               <Clock className="w-5 h-5 text-orange-400" />
               <div>
                 <p className="text-xs text-slate-500">Cook Time</p>
-                <p className="text-sm font-semibold text-slate-200">{preview.cook_time_minutes || 0} mins</p>
+                <p className="text-sm font-semibold text-slate-200">
+                  {preview.cook_time_minutes || 0} mins
+                </p>
               </div>
             </div>
             <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex items-center space-x-3">
@@ -402,8 +471,9 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
             </div>
           </div>
 
+          {/* Two-column layout: Ingredients and Instructions */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Ingredients */}
+            {/* Ingredients column */}
             <div>
               <h3 className="font-semibold text-slate-200 text-base mb-3 flex items-center justify-between">
                 <span>Ingredients</span>
@@ -414,14 +484,15 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
                   <li key={i} className="py-2 flex items-center justify-between text-sm">
                     <span className="font-medium text-slate-200">{ing.name}</span>
                     <span className="text-slate-400 font-mono text-xs bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
-                      {ing.quantity ? `${ing.quantity} ` : ''}{ing.unit || ''}
+                      {ing.quantity ? `${ing.quantity} ` : ''}
+                      {ing.unit || ''}
                     </span>
                   </li>
                 ))}
               </ul>
             </div>
 
-            {/* Steps */}
+            {/* Steps column */}
             <div>
               <h3 className="font-semibold text-slate-200 text-base mb-3 flex items-center justify-between">
                 <span>Steps</span>
@@ -444,3 +515,5 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
     </div>
   )
 }
+
+export default CaptureZone

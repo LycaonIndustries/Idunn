@@ -56,6 +56,9 @@ target-version = "py313"
 line-length = 100
 
 [tool.ruff.lint]
+ignore = [
+    "B008", # FastAPI Depends and Query in parameter defaults
+]
 select = [
     "E",    # pycodestyle errors
     "W",    # pycodestyle warnings
@@ -65,7 +68,6 @@ select = [
     "UP",   # pyupgrade
     "B",    # flake8-bugbear
     "SIM",  # flake8-simplify
-    "TCH",  # flake8-type-checking
     "D101", # Missing docstring in public class
     "D102", # Missing docstring in public method
     "D103", # Missing docstring in public function
@@ -81,4 +83,4 @@ convention = "google"
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
-line-ending = "auto" 
+line-ending = "auto"

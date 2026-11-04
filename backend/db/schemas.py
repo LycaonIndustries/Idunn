@@ -294,9 +294,7 @@ RECIPES_SCHEMA: dict[str, Any] = {
 }
 
 
-async def create_collection_with_validation(
-    db, collection_name: str, schema: dict
-) -> None:
+async def create_collection_with_validation(db, collection_name: str, schema: dict) -> None:
     """Create a collection with JSON schema validation."""
     # Check if collection exists
     existing = await db.list_collection_names()

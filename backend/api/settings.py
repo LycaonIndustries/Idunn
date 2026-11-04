@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 from pathlib import Path
-from typing import Any
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
@@ -51,6 +51,15 @@ class UpdateSettingsRequest(BaseModel):
 
 
 def _mask_key(key: str | None) -> str | None:
+    """Mask credentials so sensitive tokens are safe for screen display.
+
+    Args:
+        key: Plain-text API key or credential string.
+
+    Returns:
+        Masked string showing prefix and suffix, or None if key is absent.
+    """
+    # Prevent leaking plain text secrets in client API responses.
     if not key or not key.strip():
         return None
     k = key.strip()
@@ -60,6 +69,12 @@ def _mask_key(key: str | None) -> str | None:
 
 
 def _get_active_provider() -> str:
+    """Determine highest-priority configured LLM provider.
+
+    Returns:
+        String identifier of active provider or 'none'.
+    """
+    # Prioritize Google Gemini because of its generous free tier.
     if settings.gemini_api_key:
         return "gemini"
     if settings.anthropic_api_key:
@@ -70,7 +85,15 @@ def _get_active_provider() -> str:
 
 
 def _write_env_file(updates: dict[str, str]) -> None:
-    """Updates or creates .env file preserving existing comments/entries."""
+    """Update or create local .env file while preserving comments and structure.
+
+    Args:
+        updates: Dictionary of environment variable key-value pairs to persist.
+
+    Returns:
+        None.
+    """
+    # Read existing file to preserve user comments and unmanaged settings.
     lines: list[str] = []
     if ENV_PATH.is_file():
         lines = ENV_PATH.read_text(encoding="utf-8").splitlines()
@@ -91,7 +114,7 @@ def _write_env_file(updates: dict[str, str]) -> None:
                 continue
         new_lines.append(line)
 
-    # Append any remaining keys not present in original file
+    # Append any new configuration keys not already present in .env.
     for key, val in updates.items():
         if key not in updated_keys:
             new_lines.append(f"{key}={val}")
@@ -101,7 +124,12 @@ def _write_env_file(updates: dict[str, str]) -> None:
 
 @router.get("", response_model=SettingsStatusResponse)
 async def get_settings_status() -> SettingsStatusResponse:
-    """Return status of database and all BYOK providers with masked keys."""
+    """Return status of database and all BYOK providers with masked keys.
+
+    Returns:
+        SettingsStatusResponse containing configuration flags and masked keys.
+    """
+    # Provide system diagnostics without revealing raw secrets.
     return SettingsStatusResponse(
         database_backend=settings.database_backend,
         supabase_configured=bool(settings.supabase_url and settings.supabase_key),
@@ -124,9 +152,17 @@ async def get_settings_status() -> SettingsStatusResponse:
 
 @router.post("", response_model=SettingsStatusResponse)
 async def update_settings(req: UpdateSettingsRequest) -> SettingsStatusResponse:
-    """Update settings at runtime and persist them to .env."""
+    """Update settings at runtime and persist them to local .env file.
+
+    Args:
+        req: Update request containing updated keys and model identifiers.
+
+    Returns:
+        Updated SettingsStatusResponse.
+    """
     env_updates: dict[str, str] = {}
 
+    # Mutate runtime configuration and prepare environment updates.
     if req.supabase_url is not None:
         val = req.supabase_url.strip()
         settings.supabase_url = val or None
@@ -140,6 +176,7 @@ async def update_settings(req: UpdateSettingsRequest) -> SettingsStatusResponse:
         env_updates["SUPABASE_KEY"] = val
         from ..db.supabase_client import SupabaseClientManager
 
+        # Reset client pool to force re-authentication with updated credentials.
         SupabaseClientManager.reset()
 
     if req.gemini_api_key is not None:
@@ -173,11 +210,10 @@ async def update_settings(req: UpdateSettingsRequest) -> SettingsStatusResponse:
         env_updates["VOYAGE_API_KEY"] = val
 
     if env_updates:
-        try:
+        # Suppress file IO exceptions so disk issues do not break memory updates.
+        with contextlib.suppress(Exception):
             _write_env_file(env_updates)
-        except Exception:
-            # Runtime settings are already updated; file write failure shouldn't crash request
-            pass
 
+    # Invalidate settings lru_cache so fresh reads reload updated values.
     get_settings.cache_clear()
     return await get_settings_status()
