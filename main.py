@@ -23,7 +23,7 @@ def main() -> None:
         print("⚡ Frontend bundle not found. Building with Bun...")
         runner = "bun" if shutil.which("bun") else "npm"
         if runner == "bun":
-            subprocess.run(["bun", "--cwd", "frontend", "run", "build"], check=True)
+            subprocess.run(["bun", "run", "--cwd", "frontend", "build"], check=True)
         else:
             subprocess.run(["npm", "--prefix", "frontend", "run", "build"], check=True)
 
