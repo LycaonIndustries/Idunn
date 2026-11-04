@@ -6,8 +6,28 @@ import sys
 from pathlib import Path
 
 
-def transcribe(url: str, output: Path, model: str, max_seconds: int, max_bytes: int,
-               local_files_only: bool) -> None:
+def transcribe(
+    url: str,
+    output: Path,
+    model: str,
+    max_seconds: int,
+    max_bytes: int,
+    local_files_only: bool,
+) -> None:
+    """Download audio from a YouTube video and transcribe speech to text.
+
+    Args:
+        url: Direct YouTube video URL.
+        output: Destination text file path for transcribed output.
+        model: Whisper model variant identifier (e.g. "base", "tiny").
+        max_seconds: Maximum allowed video duration in seconds.
+        max_bytes: Maximum allowed audio file size in bytes.
+        local_files_only: Whether to restrict Whisper to pre-cached local weights.
+
+    Raises:
+        ValueError: If video is live, duration is exceeded, audio size is invalid,
+            or no speech could be transcribed.
+    """
     from faster_whisper import WhisperModel
     from yt_dlp import YoutubeDL
     from yt_dlp.utils import DownloadError
@@ -49,9 +69,13 @@ def transcribe(url: str, output: Path, model: str, max_seconds: int, max_bytes: 
 
 
 if __name__ == "__main__":
-    try:
-        transcribe(sys.argv[1], Path(sys.argv[2]), sys.argv[3], int(sys.argv[4]),
-                   int(sys.argv[5]), bool(int(sys.argv[6])))
-    except Exception as exc:
-        print(str(exc)[:400], file=sys.stderr)
-        raise SystemExit(1) from None
+    if len(sys.argv) != 7:
+        sys.exit(2)
+    transcribe(
+        sys.argv[1],
+        Path(sys.argv[2]),
+        sys.argv[3],
+        int(sys.argv[4]),
+        int(sys.argv[5]),
+        sys.argv[6] == "true",
+    )

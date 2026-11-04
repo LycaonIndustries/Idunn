@@ -11,7 +11,7 @@ htmlcov/
 *.egg-info/
 
 # Frontend build artifacts (rebuilt in Docker)
-src/idunn/web_dist/
+backend/web_dist/
 frontend/node_modules/
 
 # Git

@@ -60,6 +60,7 @@ Thumbs.db
 .coverage
 htmlcov/
 .pytest_cache/
+.hypothesis/
 .mypy_cache/
 
 # Ruff

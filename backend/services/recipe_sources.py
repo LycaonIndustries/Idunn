@@ -33,11 +33,29 @@ if TYPE_CHECKING:
 
 @dataclass
 class SourcePage:
+    """In-memory HTML content fetched from a remote recipe page.
+
+    Attributes:
+        html: Raw text of the retrieved HTML document.
+        url: Final URL after resolving redirects.
+    """
+
     html: str
     url: str
 
 
 def validate_source_url(url: str) -> httpx.URL:
+    """Validate that a URL is a syntactically valid public HTTP/HTTPS URL.
+
+    Args:
+        url: Raw URL string.
+
+    Returns:
+        Parsed httpx.URL object.
+
+    Raises:
+        SourceError: If the URL scheme, port, userinfo, or length is invalid.
+    """
     try:
         parsed = httpx.URL(url)
         if (
@@ -54,6 +72,18 @@ def validate_source_url(url: str) -> httpx.URL:
 
 
 async def public_address(host: str, port: int) -> str:
+    """Resolve host to a global public IP address preventing SSRF.
+
+    Args:
+        host: Hostname or IP to resolve.
+        port: Destination port number.
+
+    Returns:
+        The validated public IP address string.
+
+    Raises:
+        SourceError: If the host resolves to a private IP or cannot be found.
+    """
     try:
         addresses = await asyncio.to_thread(socket.getaddrinfo, host, port, type=socket.SOCK_STREAM)
         ips = [item[4][0] for item in addresses]
@@ -65,10 +95,28 @@ async def public_address(host: str, port: int) -> str:
 
 
 class PageFetcher:
-    def __init__(self, config: Settings):
+    """Fetches remote web pages with timeout, redirect, and SSRF bounds."""
+
+    def __init__(self, config: Settings) -> None:
+        """Initialize the page fetcher.
+
+        Args:
+            config: Runtime configuration with timeout and byte limits.
+        """
         self.config = config
 
     async def fetch(self, url: str) -> SourcePage:
+        """Fetch remote HTML content safely.
+
+        Args:
+            url: Validated public web URL.
+
+        Returns:
+            SourcePage container holding HTML text and final URL.
+
+        Raises:
+            SourceError: If the page exceeds limits, times out, or fails HTTP.
+        """
         current = validate_source_url(url)
         try:
             async with asyncio.timeout(self.config.source_timeout_seconds):
@@ -79,10 +127,10 @@ class PageFetcher:
                 ) as client:
                     for _ in range(6):
                         address = await public_address(
-                            current.host, current.port or (443 if current.scheme == "https" else 80)
+                            current.host,
+                            current.port or (443 if current.scheme == "https" else 80),
                         )
-                        # Connect to the checked address, preserving Host and TLS SNI. A second
-                        # DNS lookup at connect time would allow redirects/rebinding to local hosts.
+                        # Connect to the checked address, preserving Host and TLS SNI.
                         async with client.stream(
                             "GET",
                             current.copy_with(host=address),
@@ -123,11 +171,26 @@ class PageFetcher:
 
 
 def clean_text(value: str) -> str:
+    """Extract and collapse plain text from HTML or formatted markup.
+
+    Args:
+        value: HTML fragment or formatted text.
+
+    Returns:
+        Stripped, whitespace-collapsed plain text string.
+    """
     return BeautifulSoup(value, "html.parser").get_text(" ", strip=True)
 
 
 def parse_ingredient(line: str) -> IngredientItem:
-    """Parse common quantities without throwing away the original line."""
+    """Parse common quantities and units without discarding original text.
+
+    Args:
+        line: Single raw ingredient string from a recipe.
+
+    Returns:
+        Parsed IngredientItem with name, quantity, unit, and notes.
+    """
     original = clean_text(line)
     value = original
     fractions = {"½": "1/2", "¼": "1/4", "¾": "3/4", "⅓": "1/3", "⅔": "2/3"}
@@ -140,17 +203,33 @@ def parse_ingredient(line: str) -> IngredientItem:
         quantity = float(sum(Fraction(part) for part in match[1].split()))
     except (ValueError, ZeroDivisionError):
         return IngredientItem(name=original)
-    rest = value[match.end():].strip()
-    # Ranges and alternatives need a person/model, not an invented exact quantity.
+    rest = value[match.end() :].strip()
     if not rest or re.match(r"^(?:[-–]|to\b)", rest) or quantity <= 0:
         return IngredientItem(name=original)
     units = {
-        "g": "g", "gram": "g", "grams": "g", "kg": "kg", "kilogram": "kg",
-        "ml": "ml", "l": "l", "litre": "l", "litres": "l",
-        "tsp": "tsp", "teaspoon": "tsp", "teaspoons": "tsp",
-        "tbsp": "tbsp", "tablespoon": "tbsp", "tablespoons": "tbsp",
-        "cup": "cup", "cups": "cup", "katori": "katori", "chamcha": "chamcha",
-        "paav": "paav", "piece": "piece", "pieces": "piece", "bunch": "bunch",
+        "g": "g",
+        "gram": "g",
+        "grams": "g",
+        "kg": "kg",
+        "kilogram": "kg",
+        "ml": "ml",
+        "l": "l",
+        "litre": "l",
+        "litres": "l",
+        "tsp": "tsp",
+        "teaspoon": "tsp",
+        "teaspoons": "tsp",
+        "tbsp": "tbsp",
+        "tablespoon": "tbsp",
+        "tablespoons": "tbsp",
+        "cup": "cup",
+        "cups": "cup",
+        "katori": "katori",
+        "chamcha": "chamcha",
+        "paav": "paav",
+        "piece": "piece",
+        "pieces": "piece",
+        "bunch": "bunch",
     }
     parts = rest.split(maxsplit=1)
     unit = units.get(parts[0].casefold().rstrip("."))
@@ -159,12 +238,22 @@ def parse_ingredient(line: str) -> IngredientItem:
         return IngredientItem(name=original)
     name, _, note = name.partition(",")
     return IngredientItem(
-        name=name.strip(), quantity=quantity, unit=unit,
+        name=name.strip(),
+        quantity=quantity,
+        unit=unit,
         notes=(note.strip() or original)[:200],
     )
 
 
 def recipe_steps(value: Any) -> list[str]:
+    """Extract step instructions from irregular Schema.org structures.
+
+    Args:
+        value: Raw Schema.org recipeInstructions field (string, dict, or list).
+
+    Returns:
+        List of cleaned instruction strings.
+    """
     if isinstance(value, str):
         return [clean_text(line) for line in value.splitlines() if clean_text(line)]
     if isinstance(value, dict):
@@ -177,6 +266,14 @@ def recipe_steps(value: Any) -> list[str]:
 
 
 def duration_minutes(value: Any) -> int | None:
+    """Parse ISO-8601 duration into total minutes rounded up.
+
+    Args:
+        value: ISO duration string (e.g. "PT30M", "PT1H15M").
+
+    Returns:
+        Total duration in minutes, or None if invalid.
+    """
     if not isinstance(value, str):
         return None
     try:
@@ -189,6 +286,14 @@ def duration_minutes(value: Any) -> int | None:
 
 
 def extract_meta_image(html: str) -> str | None:
+    """Extract OpenGraph or Twitter preview image URL from HTML head.
+
+    Args:
+        html: Raw HTML string.
+
+    Returns:
+        Absolute HTTP/HTTPS image URL if present, else None.
+    """
     try:
         soup = BeautifulSoup(html[:100000], "html.parser")
         meta = (
@@ -207,6 +312,14 @@ def extract_meta_image(html: str) -> str | None:
 
 
 def parse_nutrition(raw: Any) -> NutritionInfo | None:
+    """Extract nutritional macronutrients from Schema.org nutrition dictionary.
+
+    Args:
+        raw: Raw Schema.org nutrition dictionary.
+
+    Returns:
+        Parsed NutritionInfo object or None if absent.
+    """
     if not isinstance(raw, dict):
         return None
 
@@ -234,6 +347,14 @@ def parse_nutrition(raw: Any) -> NutritionInfo | None:
 
 
 def structured_recipe(page: SourcePage) -> RecipeCreate | None:
+    """Extract a validated recipe model from JSON-LD Schema.org metadata.
+
+    Args:
+        page: Retrieved SourcePage holding HTML.
+
+    Returns:
+        Populated RecipeCreate model if structured recipe exists, else None.
+    """
     try:
         candidates = loads(page.html)
     except (ValueError, TypeError, KeyError):
@@ -263,8 +384,7 @@ def structured_recipe(page: SourcePage) -> RecipeCreate | None:
                 description=clean_text(raw["description"]) if raw.get("description") else None,
                 ingredients=[parse_ingredient(line) for line in ingredients],
                 steps=[
-                    Step(step_number=i + 1, instruction=text)
-                    for i, text in enumerate(instructions)
+                    Step(step_number=i + 1, instruction=text) for i, text in enumerate(instructions)
                 ],
                 prep_time_minutes=duration_minutes(raw.get("prepTime")),
                 cook_time_minutes=duration_minutes(raw.get("cookTime")),
@@ -281,11 +401,25 @@ def structured_recipe(page: SourcePage) -> RecipeCreate | None:
 
 
 def youtube_url(url: str) -> str | None:
+    """Validate and canonicalize a YouTube watch or shorts URL.
+
+    Args:
+        url: Raw video URL string.
+
+    Returns:
+        Canonical YouTube watch URL if valid, or None if not YouTube.
+
+    Raises:
+        SourceError: If the URL is an invalid video link or playlist.
+    """
     parsed = urlsplit(url)
     if parsed.hostname == "youtu.be":
         video_id = parsed.path.strip("/")
     elif parsed.hostname in {
-        "youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"
+        "youtube.com",
+        "www.youtube.com",
+        "m.youtube.com",
+        "music.youtube.com",
     }:
         if parsed.path == "/watch":
             video_id = parse_qs(parsed.query).get("v", [""])[0]
@@ -301,16 +435,38 @@ def youtube_url(url: str) -> str | None:
 
 
 class RecipeSourceReader:
-    def __init__(self, config: Settings, extractor: RecipeTextExtractor | None = None):
+    """Coordinates reading and parsing recipes from URLs, YouTube, and text."""
+
+    def __init__(
+        self,
+        config: Settings,
+        extractor: RecipeTextExtractor | None = None,
+    ) -> None:
+        """Initialize the source reader.
+
+        Args:
+            config: Runtime configuration settings.
+            extractor: Fallback LLM text extractor.
+        """
         self.config = config
         self.extractor = extractor or RecipeTextExtractor(config)
         self.fetcher = PageFetcher(config)
 
     async def from_url(self, url: str) -> tuple[ExtractedRecipe, str]:
+        """Extract recipe from web URL or YouTube video.
+
+        Args:
+            url: Web recipe URL or YouTube link.
+
+        Returns:
+            Tuple of (extracted_recipe, source_type).
+
+        Raises:
+            ProviderNotConfiguredError: If transcription requires unconfigured API key.
+        """
         validate_source_url(url)
         video = youtube_url(url)
         if video:
-            # Fail before downloading audio when the extraction service cannot be used.
             if not self.config.anthropic_api_key:
                 raise ProviderNotConfiguredError("Set ANTHROPIC_API_KEY to import videos.")
             text = await self._transcribe(video)
@@ -335,22 +491,47 @@ class RecipeSourceReader:
         return extracted, "blog"
 
     async def from_text(self, text: str, source_name: str) -> tuple[ExtractedRecipe, str]:
+        """Extract recipe from user-provided text.
+
+        Args:
+            text: Raw recipe text.
+            source_name: User-provided name for attribution.
+
+        Returns:
+            Tuple of (extracted_recipe, source_type).
+        """
         extracted = await self.extractor.extract(text)
-        # Source credit is user supplied, never a URL invented by the model.
         extracted.recipe.source_url = None
         extracted.recipe.source_name = source_name
         extracted.recipe.video_url = None
         return extracted, "manual"
 
     async def _transcribe(self, url: str) -> str:
+        """Download and transcribe a YouTube video via child process.
+
+        Args:
+            url: Validated YouTube video URL.
+
+        Returns:
+            Transcribed text from video audio.
+
+        Raises:
+            SourceError: If transcription times out or subprocess fails.
+        """
         with TemporaryDirectory(prefix="idunn-video-") as directory:
             output = Path(directory) / "transcript.txt"
             process = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "backend.services.youtube_transcribe",
-                url, str(output), self.config.whisper_model,
-                str(self.config.video_max_seconds), str(self.config.video_max_bytes),
+                sys.executable,
+                "-m",
+                "backend.services.youtube_transcribe",
+                url,
+                str(output),
+                self.config.whisper_model,
+                str(self.config.video_max_seconds),
+                str(self.config.video_max_bytes),
                 str(int(self.config.whisper_local_files_only)),
-                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
             )
             try:
                 _, stderr = await asyncio.wait_for(

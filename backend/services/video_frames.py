@@ -13,7 +13,11 @@ from .ingest_errors import ExtractionError
 
 
 def get_ffmpeg_executable() -> str:
-    """Find ffmpeg on system path or standard directories."""
+    """Find ffmpeg on system path or standard Windows install directories.
+
+    Returns:
+        The executable command name or full path to ffmpeg.exe.
+    """
     found = shutil.which("ffmpeg")
     if found:
         return found
@@ -28,7 +32,19 @@ def get_ffmpeg_executable() -> str:
 
 
 def extract_frames_sync(video_path: Path, output_dir: Path, fps: int = 1) -> list[Path]:
-    """Run ffmpeg synchronously to sample frames at given fps."""
+    """Run ffmpeg synchronously to sample frames at given fps.
+
+    Args:
+        video_path: Path to the input video file on disk.
+        output_dir: Directory where JPEG frames are written.
+        fps: Number of frames per second to sample.
+
+    Returns:
+        Sorted list of paths to sampled JPEG frame files.
+
+    Raises:
+        ExtractionError: If ffmpeg fails, times out, or produces zero frames.
+    """
     ffmpeg = get_ffmpeg_executable()
     output_pattern = str(output_dir / "frame_%04d.jpg")
     cmd = [
@@ -59,7 +75,15 @@ def extract_frames_sync(video_path: Path, output_dir: Path, fps: int = 1) -> lis
 
 
 async def sample_video_keyframes(video_bytes: bytes, max_frames: int = 15) -> list[bytes]:
-    """Extract and evenly sample keyframes from raw video bytes."""
+    """Extract and evenly sample keyframes from raw video bytes.
+
+    Args:
+        video_bytes: Raw binary video file content.
+        max_frames: Maximum number of frames to return.
+
+    Returns:
+        List of JPEG-encoded byte arrays for each sampled keyframe.
+    """
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         video_file = tmp_path / "input_video.mp4"
