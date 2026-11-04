@@ -51,4 +51,31 @@ describe('Navbar Component', () => {
 
     expect(handleTabChange).toHaveBeenCalledWith('pantry')
   })
+  // Verify clicking Cook AI and Shopping tabs.
+  it('triggers setActiveTab when Cook AI or Shopping tab is clicked', () => {
+    const handleTabChange = mock(() => {})
+
+    const { getByText } = render(
+      <Navbar
+        activeTab="capture"
+        setActiveTab={handleTabChange}
+        recipeCount={2}
+        pantryCount={4}
+      />
+    )
+
+    const cookAiButton = getByText('Cook AI').closest('button')
+    expect(cookAiButton).toBeDefined()
+    if (cookAiButton) {
+      fireEvent.click(cookAiButton)
+    }
+    expect(handleTabChange).toHaveBeenCalledWith('cook-ai')
+
+    const shoppingButton = getByText('Shopping').closest('button')
+    expect(shoppingButton).toBeDefined()
+    if (shoppingButton) {
+      fireEvent.click(shoppingButton)
+    }
+    expect(handleTabChange).toHaveBeenCalledWith('shopping')
+  })
 })

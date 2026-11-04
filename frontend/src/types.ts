@@ -334,3 +334,44 @@ export interface ShoppingListItemUpdate {
   unit?: string
   checked?: boolean
 }
+
+// Algorithmic pantry recipe match with FEFO urgency score.
+export interface PantryMatchResult {
+  recipe_id: string
+  recipe_title: string
+  coverage_percentage: number
+  matched_ingredients: string[]
+  missing_ingredients: string[]
+  expiry_urgency_score: number
+  can_cook_now: boolean
+}
+
+// Deterministic culinary substitution suggestion.
+export interface SubstitutionSuggestion {
+  target_ingredient: string
+  substitute_name: string
+  category: string
+  ratio: string
+  in_pantry: boolean
+  notes: string
+}
+
+// User-triggered generative pantry-to-plate recipe.
+export interface PantryToPlateRecipe {
+  title: string
+  description?: string
+  prep_time_minutes: number
+  cook_time_minutes: number
+  servings: number
+  cuisine_type: string
+  ingredients: Array<{ name: string; quantity: number; unit: string }>
+  steps: Array<{ step_number: number; instruction: string }>
+  assumed_staples: string[]
+}
+
+export interface PantryToPlateRequest {
+  selected_item_ids?: string[]
+  meal_type?: string
+  servings?: number
+  dietary_preference?: string | null
+}
