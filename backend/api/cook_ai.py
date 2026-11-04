@@ -1,6 +1,6 @@
 """Cook AI API endpoints for Iðunn Kitchen OS.
 
-Exposes algorithmic pantry recipe matching and vault queries.
+Exposes algorithmic pantry recipe matching, vault queries, and culinary substitutions.
 """
 
 from __future__ import annotations
@@ -11,10 +11,15 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from backend.db import get_db
-from backend.models.cook_ai import PantryMatchResult
+from backend.models.cook_ai import (
+    PantryMatchResult,
+    SubstitutionQueryRequest,
+    SubstitutionSuggestion,
+)
 from backend.models.inventory import Item
 from backend.models.recipe import Recipe
 from backend.services.recipe_matching import RecipeMatchingService
+from backend.services.substitution_engine import SubstitutionEngine
 
 logger = logging.getLogger("backend.api.cook_ai")
 
@@ -60,3 +65,34 @@ async def what_can_i_cook(
 
     # Rank recipes deterministically without LLM calls.
     return RecipeMatchingService.rank_recipes(recipes, inventory, ready_only=ready_only)
+
+
+@router.post(
+    "/substitutions",
+    response_model=list[SubstitutionSuggestion],
+    summary="Get culinary substitution suggestions for an ingredient",
+)
+async def get_substitutions(
+    request: SubstitutionQueryRequest,
+    db=Depends(get_db),
+) -> list[SubstitutionSuggestion]:
+    """Retrieve functional substitutions prioritizing ingredients in pantry inventory.
+
+    Args:
+        request: SubstitutionQueryRequest containing the ingredient name.
+        db: Database session dependency.
+
+    Returns:
+        List of SubstitutionSuggestion sorted with in-stock pantry items first.
+    """
+    logger.info("Evaluating substitution query for ingredient: %s", request.ingredient)
+
+    # Fetch active unconsumed inventory to identify pantry-ready replacements.
+    raw_inventory = await db.inventory.find({"consumed": False}).to_list(length=1000)
+    inventory: list[Item] = []
+    for doc in raw_inventory:
+        doc["_id"] = str(doc.get("_id", ""))
+        inventory.append(Item.model_validate(doc))
+
+    # Execute deterministic substitution match against pantry stock.
+    return SubstitutionEngine.find_pantry_substitutions(request.ingredient, inventory)
