@@ -70,6 +70,19 @@ select = [
     "UP",   # pyupgrade
     "B",    # flake8-bugbear
     "SIM",  # flake8-simplify
+    "G",    # flake8-logging-format
+    "LOG",  # flake8-logging
+    "S105", # possible hardcoded password string
+    "S106", # possible hardcoded password func arg
+    "S107", # possible hardcoded password default
+    "S113", # requests call without timeout
+    "RET505", # superfluous else after return
+    "RET506", # superfluous else after raise
+    "RET507", # superfluous else after continue
+    "RET508", # superfluous else after break
+    "A001", # variable shadowing python builtin
+    "A002", # argument shadowing python builtin
+    "A003", # attribute shadowing python builtin
     "D101", # Missing docstring in public class
     "D102", # Missing docstring in public method
     "D103", # Missing docstring in public function
@@ -80,7 +93,7 @@ select = [
 convention = "google"
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["D101", "D102", "D103", "D417", "E501"]
+"tests/**/*.py" = ["D101", "D102", "D103", "D417", "E501", "S105", "S106"]
 
 [tool.ruff.format]
 quote-style = "double"
