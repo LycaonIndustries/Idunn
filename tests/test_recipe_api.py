@@ -74,13 +74,16 @@ async def test_review_confirms_rows_and_prevents_stale_decisions(api_client, db,
     assert edited.json()["ingredient_matches"][0]["ingredient_id"] is None
 
 
-@pytest.mark.parametrize("decisions", [
-    [{"ingredient_index": 9, "ignore": True}],
-    [{"ingredient_index": 0, "ignore": True}, {"ingredient_index": 0, "ignore": True}],
-    [{"ingredient_index": 0, "ingredient_id": str(ObjectId())}],
-    [{"ingredient_index": 0}],
-    [{"ingredient_index": 0, "ingredient_id": str(ObjectId()), "ignore": True}],
-])
+@pytest.mark.parametrize(
+    "decisions",
+    [
+        [{"ingredient_index": 9, "ignore": True}],
+        [{"ingredient_index": 0, "ignore": True}, {"ingredient_index": 0, "ignore": True}],
+        [{"ingredient_index": 0, "ingredient_id": str(ObjectId())}],
+        [{"ingredient_index": 0}],
+        [{"ingredient_index": 0, "ingredient_id": str(ObjectId()), "ignore": True}],
+    ],
+)
 def test_invalid_review_leaves_queue_unchanged(api_client, recipe_data, decisions):
     recipe_id = api_client.post("/api/v1/recipes", json=recipe_data).json()["_id"]
     response = api_client.post(
@@ -95,21 +98,38 @@ async def test_uncertain_extraction_needs_explicit_approval(api_client, db, reci
     await db.recipes.update_one(
         {"_id": ObjectId(recipe_id)}, {"$set": {"extraction_reviewed": False}}
     )
-    response = api_client.post(f"/api/v1/recipes/{recipe_id}/review", json={
-        "revision": 0, "decisions": [{"ingredient_index": 0, "ignore": True}],
-    })
+    response = api_client.post(
+        f"/api/v1/recipes/{recipe_id}/review",
+        json={
+            "revision": 0,
+            "decisions": [{"ingredient_index": 0, "ignore": True}],
+        },
+    )
     assert response.json()["needs_review"] is True
-    approved = api_client.post(f"/api/v1/recipes/{recipe_id}/review", json={
-        "revision": 1, "approve_extraction": True,
-    })
+    approved = api_client.post(
+        f"/api/v1/recipes/{recipe_id}/review",
+        json={
+            "revision": 1,
+            "approve_extraction": True,
+        },
+    )
     assert approved.json()["needs_review"] is False
 
 
 def test_import_stores_a_readable_recipe(api_client, service, recipe_html, monkeypatch):
-    monkeypatch.setattr(service.reader.fetcher, "fetch", AsyncMock(return_value=SourcePage(
-        recipe_html, "https://recipes.example/aloo-gobi",
-    )))
-    response = api_client.post("/api/v1/recipes/ingest", params={"url": "https://recipes.example/aloo-gobi"})
+    monkeypatch.setattr(
+        service.reader.fetcher,
+        "fetch",
+        AsyncMock(
+            return_value=SourcePage(
+                recipe_html,
+                "https://recipes.example/aloo-gobi",
+            )
+        ),
+    )
+    response = api_client.post(
+        "/api/v1/recipes/ingest", params={"url": "https://recipes.example/aloo-gobi"}
+    )
     assert response.status_code == 201
     result = response.json()
     stored = api_client.get(f"/api/v1/recipes/{result['recipe_id']}").json()
@@ -119,16 +139,21 @@ def test_import_stores_a_readable_recipe(api_client, service, recipe_html, monke
     assert len(api_client.get("/api/v1/recipes/review").json()) == 1
 
 
-@pytest.mark.parametrize(("error", "code"), [
-    (SourceError("bad source"), 400),
-    (ExtractionError("no recipe"), 422),
-    (ProviderNotConfiguredError("missing key"), 503),
-    (ProviderError("provider failed"), 502),
-    (AutoReconnect("database failed"), 503),
-])
+@pytest.mark.parametrize(
+    ("error", "code"),
+    [
+        (SourceError("bad source"), 400),
+        (ExtractionError("no recipe"), 422),
+        (ProviderNotConfiguredError("missing key"), 503),
+        (ProviderError("provider failed"), 502),
+        (AutoReconnect("database failed"), 503),
+    ],
+)
 def test_import_errors_never_report_success(api_client, service, monkeypatch, error, code):
     monkeypatch.setattr(service, "ingest_from_url", AsyncMock(side_effect=error))
-    response = api_client.post("/api/v1/recipes/ingest", params={"url": "https://recipes.example/a"})
+    response = api_client.post(
+        "/api/v1/recipes/ingest", params={"url": "https://recipes.example/a"}
+    )
     assert response.status_code == code
     assert "recipe_id" not in response.json()
     assert api_client.get("/api/v1/recipes").json() == []
@@ -137,9 +162,13 @@ def test_import_errors_never_report_success(api_client, service, monkeypatch, er
 def test_review_race_returns_conflict(api_client, db, recipe_data, monkeypatch):
     recipe_id = api_client.post("/api/v1/recipes", json=recipe_data).json()["_id"]
     monkeypatch.setattr(type(db.recipes), "find_one_and_update", AsyncMock(return_value=None))
-    response = api_client.post(f"/api/v1/recipes/{recipe_id}/review", json={
-        "revision": 0, "decisions": [{"ingredient_index": 0, "ignore": True}],
-    })
+    response = api_client.post(
+        f"/api/v1/recipes/{recipe_id}/review",
+        json={
+            "revision": 0,
+            "decisions": [{"ingredient_index": 0, "ignore": True}],
+        },
+    )
     assert response.status_code == 409
 
 
@@ -158,9 +187,16 @@ async def test_ingredient_edits_invalidate_old_vectors(api_client, db):
         (f"/api/v1/ingredients/{ingredient_id}", {"name": "sweet potato"}),
         (f"/api/v1/ingredients/{ingredient_id}/synonyms", {"name": "shakarkandi"}),
     ]:
-        await db.ingredients.update_one({"_id": ObjectId(ingredient_id)}, {"$set": {
-            "embedding": [1.0, 0.0, 0.0], "embedding_model": "test", "embedding_text": "potato",
-        }})
+        await db.ingredients.update_one(
+            {"_id": ObjectId(ingredient_id)},
+            {
+                "$set": {
+                    "embedding": [1.0, 0.0, 0.0],
+                    "embedding_model": "test",
+                    "embedding_text": "potato",
+                }
+            },
+        )
         method = api_client.post if path.endswith("synonyms") else api_client.patch
         assert method(path, json=payload).status_code == 200
         stored = await db.ingredients.find_one({"_id": ObjectId(ingredient_id)})
@@ -168,7 +204,13 @@ async def test_ingredient_edits_invalidate_old_vectors(api_client, db):
 
 
 def test_new_inventory_items_still_need_positive_quantity(api_client):
-    response = api_client.post("/api/v1/items", json={
-        "name": "Rice", "quantity": 0, "unit": "kg", "location": "pantry",
-    })
+    response = api_client.post(
+        "/api/v1/items",
+        json={
+            "name": "Rice",
+            "quantity": 0,
+            "unit": "kg",
+            "location": "pantry",
+        },
+    )
     assert response.status_code == 422

@@ -158,7 +158,7 @@ def mixed_inventory(api_client) -> dict:
 
     created = []
     for index, ((name, quantity, unit, location), offset) in enumerate(
-        zip(rows, offsets)
+        zip(rows, offsets, strict=False)
     ):
         payload = {
             "name": name,
@@ -205,9 +205,7 @@ class TestPhase1ExitCriteria:
         not_consumed = [entry for entry in items if not entry["doc"]["consumed"]]
         assert len(consumed) == 1
         assert len(not_consumed) == 49
-        assert all(
-            entry["doc"]["consumed"] is entry["consumed"] for entry in items
-        )
+        assert all(entry["doc"]["consumed"] is entry["consumed"] for entry in items)
 
         units = [Unit(entry["doc"]["unit"]) for entry in items]
         mass_count = sum(1 for unit in units if unit in MASS_UNITS)
@@ -222,9 +220,7 @@ class TestPhase1ExitCriteria:
 
         listed = _list_items(api_client)
         assert len(listed) == 49
-        assert {doc["_id"] for doc in listed} == {
-            entry["doc"]["_id"] for entry in not_consumed
-        }
+        assert {doc["_id"] for doc in listed} == {entry["doc"]["_id"] for entry in not_consumed}
 
     def test_expiring_this_week_query(self, api_client, mixed_inventory):
         now = mixed_inventory["now"]
@@ -233,9 +229,7 @@ class TestPhase1ExitCriteria:
         expected = sorted(
             (entry["offset"], entry["doc"]["_id"])
             for entry in items
-            if entry["offset"] is not None
-            and not entry["consumed"]
-            and 0 < entry["offset"] <= 7
+            if entry["offset"] is not None and not entry["consumed"] and 0 < entry["offset"] <= 7
         )
         expected_ids = [item_id for _, item_id in expected]
         assert len(expected_ids) == 14
@@ -254,16 +248,12 @@ class TestPhase1ExitCriteria:
             assert expiry is not None
             assert now <= expiry <= window_end
 
-        consumed_id = next(
-            entry["doc"]["_id"] for entry in items if entry["consumed"]
-        )
+        consumed_id = next(entry["doc"]["_id"] for entry in items if entry["consumed"])
         assert consumed_id not in {doc["_id"] for doc in returned}
 
     def test_fefo_ordering(self, api_client, mixed_inventory):
         items = mixed_inventory["items"]
-        expected_ids = {
-            entry["doc"]["_id"] for entry in items if not entry["consumed"]
-        }
+        expected_ids = {entry["doc"]["_id"] for entry in items if not entry["consumed"]}
 
         returned = _list_items(api_client)
         assert len(returned) == 49
@@ -342,9 +332,7 @@ class TestPhase1ExitCriteria:
         returned = _list_items(api_client)
 
         returned_locations = {doc["location"] for doc in returned}
-        expected_locations = {
-            entry["location"].value for entry in items if not entry["consumed"]
-        }
+        expected_locations = {entry["location"].value for entry in items if not entry["consumed"]}
         assert returned_locations == expected_locations
         assert len(returned_locations) > 1
 
@@ -366,16 +354,12 @@ class TestPhase1ExitCriteria:
         expected_expired_ids = {
             entry["doc"]["_id"]
             for entry in items
-            if entry["offset"] is not None
-            and entry["offset"] < 0
-            and not entry["consumed"]
+            if entry["offset"] is not None and entry["offset"] < 0 and not entry["consumed"]
         }
         expected_not_expired_ids = {
             entry["doc"]["_id"]
             for entry in items
-            if entry["offset"] is not None
-            and entry["offset"] >= 0
-            and not entry["consumed"]
+            if entry["offset"] is not None and entry["offset"] >= 0 and not entry["consumed"]
         }
 
         returned = _list_items(api_client)

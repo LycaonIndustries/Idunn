@@ -69,14 +69,18 @@ def recipe_html():
         "name": "Aloo Gobi",
         "recipeIngredient": ["2 aloo", "½ tsp haldi"],
         "recipeInstructions": [
-            {"@type": "HowToSection", "name": "Cook", "itemListElement": [
-                {"@type": "HowToStep", "text": "Heat oil."},
-                {"@type": "HowToStep", "text": "Add vegetables and cook."},
-            ]},
+            {
+                "@type": "HowToSection",
+                "name": "Cook",
+                "itemListElement": [
+                    {"@type": "HowToStep", "text": "Heat oil."},
+                    {"@type": "HowToStep", "text": "Add vegetables and cook."},
+                ],
+            },
         ],
         "recipeYield": ["4 servings"],
         "prepTime": "PT1H15M",
         "cookTime": "PT30M30S",
         "image": [{"@type": "ImageObject", "url": "/curry.jpg"}],
     }
-    return '<html><script type="application/ld+json">' + json.dumps(data) + '</script></html>'
+    return '<html><script type="application/ld+json">' + json.dumps(data) + "</script></html>"

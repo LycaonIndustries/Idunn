@@ -1,0 +1,26 @@
+# See https://pre-commit.com for more information
+repos:
+  # Fast backend linting and formatting via official Ruff pre-commit hook
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.10
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Local hooks for frontend validation via Bun
+  - repo: local
+    hooks:
+      - id: frontend-lint
+        name: Frontend Oxlint (via Bun)
+        entry: bun --cwd frontend run lint
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+
+      - id: frontend-test
+        name: Frontend Tests (via Bun)
+        entry: bun --cwd frontend test
+        language: system
+        files: ^frontend/
+        pass_filenames: false

@@ -6,16 +6,19 @@ as specified in the design doc exit criteria.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from hypothesis import given, strategies as st, settings, HealthCheck
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+from pydantic import ValidationError
 
 from backend.models.inventory import (
+    UNIT_CONVERSIONS,
     Item,
     ItemCreate,
-    Unit,
     Location,
-    UNIT_CONVERSIONS,
+    Unit,
 )
 
 
@@ -127,7 +130,9 @@ class TestUnitConversions:
         assert result is None
 
     @given(
-        quantity=st.floats(min_value=0.001, max_value=1000.0, allow_nan=False, allow_infinity=False),
+        quantity=st.floats(
+            min_value=0.001, max_value=1000.0, allow_nan=False, allow_infinity=False
+        ),
     )
     @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_gram_kilogram_roundtrip(self, quantity):
@@ -156,7 +161,9 @@ class TestUnitConversions:
         assert grams_back == pytest.approx(quantity, rel=1e-6)
 
     @given(
-        quantity=st.floats(min_value=0.001, max_value=1000.0, allow_nan=False, allow_infinity=False),
+        quantity=st.floats(
+            min_value=0.001, max_value=1000.0, allow_nan=False, allow_infinity=False
+        ),
     )
     @settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
     def test_ml_liter_roundtrip(self, quantity):
@@ -215,7 +222,7 @@ class TestItemModel:
 
     def test_item_create_with_expiry(self):
         """Item with expiry date."""
-        from datetime import datetime, timedelta, UTC
+        from datetime import UTC, datetime
 
         expiry = datetime.now(UTC) + timedelta(days=7)
         item = ItemCreate(
@@ -229,7 +236,7 @@ class TestItemModel:
 
     def test_item_create_invalid_quantity(self):
         """Zero or negative quantity should fail."""
-        with pytest.raises(Exception):  # Pydantic validation error
+        with pytest.raises(ValidationError):  # Pydantic validation error
             ItemCreate(
                 name="Test",
                 quantity=0,
@@ -239,7 +246,7 @@ class TestItemModel:
 
     def test_item_is_expired(self):
         """Test expiry check."""
-        from datetime import datetime, timedelta, UTC
+        from datetime import UTC, datetime
 
         # Expired item
         old_expiry = datetime.now(UTC) - timedelta(days=1)
@@ -256,7 +263,7 @@ class TestItemModel:
 
     def test_item_not_expired(self):
         """Test non-expired item."""
-        from datetime import datetime, timedelta, UTC
+        from datetime import UTC, datetime
 
         future_expiry = datetime.now(UTC) + timedelta(days=7)
         item = Item(
@@ -280,8 +287,14 @@ class TestLocationEnum:
     def test_all_locations(self):
         """Verify all expected locations exist."""
         expected = [
-            "fridge", "freezer", "pantry", "dry_store",
-            "cabinet", "counter", "spice_box", "windowsill",
+            "fridge",
+            "freezer",
+            "pantry",
+            "dry_store",
+            "cabinet",
+            "counter",
+            "spice_box",
+            "windowsill",
         ]
         actual = [loc.value for loc in Location]
         assert set(actual) == set(expected)

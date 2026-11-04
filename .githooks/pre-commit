@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+# Pre-commit hook for Iðunn Kitchen OS
+# Enforces Ruff linting & formatting for Python backend and Oxlint + Bun tests for frontend.
+
+set -e
+
+echo "[pre-commit] Checking backend with Ruff..."
+uv run ruff check backend
+uv run ruff format --check backend
+
+echo "[pre-commit] Checking frontend with Bun..."
+if command -v bun >/dev/null 2>&1; then
+    (cd frontend && bun run lint && bun test)
+else
+    echo "[pre-commit] Warning: bun not found in PATH, skipping frontend checks."
+fi
+
+echo "[pre-commit] All pre-commit checks passed successfully!"

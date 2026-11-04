@@ -28,9 +28,7 @@ async def test_gemini_extract_text_success() -> None:
         '"servings": 4, "ingredients": [{"name": "toor dal", "quantity": 1, "unit": "katori"}], '
         '"steps": [{"step_number": 1, "instruction": "Boil dal"}]}, "confidence": 0.95}'
     )
-    fake_response_data = {
-        "candidates": [{"content": {"parts": [{"text": recipe_json}]}}]
-    }
+    fake_response_data = {"candidates": [{"content": {"parts": [{"text": recipe_json}]}}]}
 
     mock_response = AsyncMock(spec=httpx.Response)
     mock_response.status_code = 200
@@ -54,9 +52,7 @@ async def test_gemini_extract_image_success() -> None:
         '"servings": 3, "ingredients": [{"name": "paneer", "quantity": 200, "unit": "g"}], '
         '"steps": [{"step_number": 1, "instruction": "Blanch palak"}]}, "confidence": 0.92}'
     )
-    fake_response_data = {
-        "candidates": [{"content": {"parts": [{"text": recipe_json}]}}]
-    }
+    fake_response_data = {"candidates": [{"content": {"parts": [{"text": recipe_json}]}}]}
 
     mock_response = AsyncMock(spec=httpx.Response)
     mock_response.status_code = 200
@@ -77,8 +73,9 @@ async def test_gemini_api_error_handling() -> None:
     mock_response.status_code = 429
     mock_response.text = "Quota exceeded"
 
-    with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=mock_response)), pytest.raises(
-        ProviderError
+    with (
+        patch("httpx.AsyncClient.post", new=AsyncMock(return_value=mock_response)),
+        pytest.raises(ProviderError),
     ):
         await extractor.extract_text("some text")
 
@@ -93,9 +90,7 @@ async def test_recipe_text_extractor_prefers_gemini_when_set() -> None:
         '"servings": 2, "ingredients": [{"name": "rice", "quantity": 1, "unit": "cup"}], '
         '"steps": [{"step_number": 1, "instruction": "Pressure cook"}]}, "confidence": 0.9}'
     )
-    fake_response_data = {
-        "candidates": [{"content": {"parts": [{"text": recipe_json}]}}]
-    }
+    fake_response_data = {"candidates": [{"content": {"parts": [{"text": recipe_json}]}}]}
 
     mock_response = AsyncMock(spec=httpx.Response)
     mock_response.status_code = 200

@@ -108,8 +108,18 @@ export interface InventoryItem {
   expiry_date?: string | null
   /** ISO-8601 date string when item was stocked. */
   created_at?: string
+  /** ISO-8601 date string when item was added. */
+  added_at?: string
+  /** ISO-8601 date string when item was last modified. */
+  updated_at?: string
   /** Calculated days until expiration. Negative numbers indicate expired stock. */
   days_to_expiry?: number | null
+  /** Flag indicating whether stock was consumed or discarded. */
+  consumed?: boolean
+  /** Optional item notes. */
+  notes?: string | null
+  /** Barcode identifier. */
+  barcode?: string | null
 }
 
 // Payload for adding a new pantry item.

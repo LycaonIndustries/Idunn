@@ -18,7 +18,7 @@ from mongomock_motor import AsyncMongoMockClient
 
 from backend.api.recipes import get_ingest_service
 from backend.db import get_db
-from backend.main import app, WEB_DIST
+from backend.main import WEB_DIST, app
 from backend.services.recipe_ingest import RecipeIngestService
 
 
@@ -26,6 +26,7 @@ from backend.services.recipe_ingest import RecipeIngestService
 def spa_client():
     """TestClient with mock DB, no lifespan — same pattern as conftest.api_client."""
     from fastapi.testclient import TestClient
+
     from backend.config import Settings
 
     db = AsyncMongoMockClient()["idunn_test"]

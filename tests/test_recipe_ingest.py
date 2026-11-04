@@ -20,12 +20,18 @@ def extracted(data, confidence=1):
 async def test_exact_synonyms_link_in_order_without_embeddings(
     service, db, recipe_html, monkeypatch
 ):
-    potato = await db.ingredients.insert_one({
-        "name": "potato", "synonyms": [{"name": "aloo"}],
-    })
-    turmeric = await db.ingredients.insert_one({
-        "name": "turmeric", "synonyms": [{"name": "haldi"}],
-    })
+    potato = await db.ingredients.insert_one(
+        {
+            "name": "potato",
+            "synonyms": [{"name": "aloo"}],
+        }
+    )
+    turmeric = await db.ingredients.insert_one(
+        {
+            "name": "turmeric",
+            "synonyms": [{"name": "haldi"}],
+        }
+    )
     page = SourcePage(recipe_html, "https://example.org/r")
     monkeypatch.setattr(service.reader.fetcher, "fetch", AsyncMock(return_value=page))
     result = await service.ingest_from_url("https://example.org/r")
@@ -47,12 +53,18 @@ async def test_ambiguous_synonym_is_not_guessed(service, db, recipe_data):
 
 
 async def test_synonym_region_disambiguates(service, db, recipe_data):
-    north = await db.ingredients.insert_one({
-        "name": "potato", "synonyms": [{"name": "aloo", "region": "north_india"}],
-    })
-    await db.ingredients.insert_one({
-        "name": "another tuber", "synonyms": [{"name": "aloo", "region": "south_india"}],
-    })
+    north = await db.ingredients.insert_one(
+        {
+            "name": "potato",
+            "synonyms": [{"name": "aloo", "region": "north_india"}],
+        }
+    )
+    await db.ingredients.insert_one(
+        {
+            "name": "another tuber",
+            "synonyms": [{"name": "aloo", "region": "south_india"}],
+        }
+    )
     result = await service.store(extracted(recipe_data), "manual")
     doc = await db.recipes.find_one({"_id": ObjectId(result.recipe_id)})
     assert doc["normalized_ingredients"] == [str(north.inserted_id)]
@@ -70,9 +82,13 @@ async def test_vector_threshold_and_ambiguity_margin(
 
     def aggregate(pipeline):
         assert pipeline[0]["$vectorSearch"]["filter"] == {"embedding_model": "voyage-3-large"}
-        return SimpleNamespace(to_list=AsyncMock(return_value=[
-            {"_id": item, "score": score} for item, score in zip(ids, scores, strict=True)
-        ]))
+        return SimpleNamespace(
+            to_list=AsyncMock(
+                return_value=[
+                    {"_id": item, "score": score} for item, score in zip(ids, scores, strict=True)
+                ]
+            )
+        )
 
     monkeypatch.setattr(service.matcher.collection, "aggregate", aggregate)
     result = await service.store(extracted(recipe_data), "manual")
@@ -89,9 +105,7 @@ async def test_invalid_extraction_is_not_stored(service, db):
     assert await db.recipes.count_documents({}) == 0
 
 
-async def test_provider_failure_does_not_save_partial_recipe(
-    service, db, recipe_data, monkeypatch
-):
+async def test_provider_failure_does_not_save_partial_recipe(service, db, recipe_data, monkeypatch):
     service.embedder.config.voyage_api_key = "test-key"
     monkeypatch.setattr(service.embedder, "embed", AsyncMock(side_effect=ProviderError("offline")))
     with pytest.raises(ProviderError):

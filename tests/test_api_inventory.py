@@ -3,14 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import AsyncGenerator
 
 import pytest
-from motor.motor_asyncio import AsyncIOMotorClient
-from fastapi.testclient import TestClient
 
-from backend.main import app
-from backend.models.inventory import Unit, Location
+from backend.models.inventory import Location, Unit
 
 
 @pytest.fixture
@@ -104,9 +100,7 @@ class TestUpdateItem:
         item_id = create_resp.json()["_id"]
 
         # Update quantity
-        response = client.patch(
-            f"/api/v1/items/{item_id}", json={"quantity": 3.0}
-        )
+        response = client.patch(f"/api/v1/items/{item_id}", json={"quantity": 3.0})
         assert response.status_code == 200
         data = response.json()
         assert data["quantity"] == 3.0
@@ -120,9 +114,7 @@ class TestConsumeItem:
         item_id = create_resp.json()["_id"]
 
         # Consume 1 kg
-        response = client.post(
-            f"/api/v1/items/{item_id}/consume", params={"quantity": 1.0}
-        )
+        response = client.post(f"/api/v1/items/{item_id}/consume", params={"quantity": 1.0})
         assert response.status_code == 200
         data = response.json()
         assert data["quantity"] == 1.5  # 2.5 - 1.0
@@ -135,9 +127,7 @@ class TestConsumeItem:
         item_id = create_resp.json()["_id"]
 
         # Consume all 2.5 kg
-        response = client.post(
-            f"/api/v1/items/{item_id}/consume", params={"quantity": 2.5}
-        )
+        response = client.post(f"/api/v1/items/{item_id}/consume", params={"quantity": 2.5})
         assert response.status_code == 200
         data = response.json()
         assert data["quantity"] == 0
