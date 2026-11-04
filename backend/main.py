@@ -6,6 +6,8 @@ Serves both the API and the built React frontend from a single process.
 
 from __future__ import annotations
 
+import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -21,6 +23,7 @@ from .api import settings as settings_api
 from .config import settings
 from .db import MongoClient
 from .db.schemas import setup_database_validation
+from .logging_config import setup_logging
 from .services.ingest_errors import (
     ExtractionError,
     IngestError,
@@ -31,6 +34,9 @@ from .services.ingest_errors import (
 
 # Locate production build output of the web frontend.
 WEB_DIST = Path(__file__).resolve().parent / "web_dist"
+
+
+setup_logging()
 
 
 @asynccontextmanager
@@ -82,6 +88,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+logger = logging.getLogger("backend.api")
+
+
+# Record execution duration and status code for all API requests.
+@app.middleware("http")
+async def log_requests_middleware(request: Request, call_next):
+    """Log incoming request method, path, response status, and duration.
+
+    Args:
+        request: Incoming HTTP request.
+        call_next: Request handler chain.
+
+    Returns:
+        Generated Response object.
+    """
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000.0
+    logger.info(
+        "%s %s - completed %s in %.2fms",
+        request.method,
+        request.url.path,
+        response.status_code,
+        duration_ms,
+    )
+    return response
+
 
 # Mount primary sub-routers for inventory, master ingredients, and recipes.
 app.include_router(inventory.router)
