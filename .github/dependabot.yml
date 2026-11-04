@@ -1,31 +1,47 @@
+# Dependabot configuration for Idunn
 version: 2
 updates:
   # Python backend dependencies (pyproject.toml)
   - package-ecosystem: "pip"
     directory: "/"
+    target-branch: "dependabot-updates"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "backend"
+    groups:
+      dependencies:
+        patterns:
+          - "*"
 
   # React frontend dependencies (frontend/package.json)
   - package-ecosystem: "npm"
     directory: "/frontend"
+    target-branch: "dependabot-updates"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
       - "frontend"
+    groups:
+      dependencies:
+        patterns:
+          - "*"
 
   # Docker container base images (Dockerfile)
   - package-ecosystem: "docker"
     directory: "/"
+    target-branch: "dependabot-updates"
     schedule:
       interval: "monthly"
     open-pull-requests-limit: 5
     labels:
       - "dependencies"
       - "docker"
+    groups:
+      dependencies:
+        patterns:
+          - "*"
