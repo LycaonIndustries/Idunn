@@ -1,5 +1,12 @@
 # See https://pre-commit.com for more information
 repos:
+  # Prohibit direct commits to protected default branches
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: no-commit-to-branch
+        args: [--branch, main, --branch, master]
+
   # Fast backend linting and formatting via official Ruff pre-commit hook
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.9.10
