@@ -4,9 +4,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from idunn.models.recipe import RecipeCreate
-from idunn.services.recipe_ingest import IngestResult
-from idunn.services.recipe_providers import ExtractedRecipe
+from backend.models.recipe import RecipeCreate
+from backend.services.recipe_ingest import IngestResult
+from backend.services.recipe_providers import ExtractedRecipe
 
 
 @pytest.fixture

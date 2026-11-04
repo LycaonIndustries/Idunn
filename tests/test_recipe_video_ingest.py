@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from idunn.services.recipe_ingest import IngestResult
+from backend.services.recipe_ingest import IngestResult
 
 
 def test_ingest_video_success(api_client, service, monkeypatch):
@@ -52,8 +52,8 @@ def test_ingest_video_rejects_empty_file(api_client):
 @pytest.mark.asyncio
 async def test_sample_video_keyframes_empty_bytes_raises():
     """Attempting to extract frames from invalid/empty bytes raises ExtractionError."""
-    from idunn.services.ingest_errors import ExtractionError
-    from idunn.services.video_frames import sample_video_keyframes
+    from backend.services.ingest_errors import ExtractionError
+    from backend.services.video_frames import sample_video_keyframes
 
     with pytest.raises(ExtractionError):
         await sample_video_keyframes(b"corrupt video stream")

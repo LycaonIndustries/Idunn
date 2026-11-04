@@ -8,8 +8,8 @@ COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --ignore-scripts
 
 COPY frontend/ ./
-# Vite outputs to ../src/idunn/web_dist relative to frontend/
-RUN mkdir -p ../src/idunn && npm run build
+# Vite outputs to ../backend/web_dist relative to frontend/
+RUN mkdir -p ../backend && npm run build
 
 
 # ──────────────────────────────────────────────
@@ -28,18 +28,18 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 WORKDIR /app
 
 # Install Python dependencies first (layer cache)
-COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+COPY pyproject.toml ./
+RUN uv sync --no-dev --no-install-project
 
 # Copy backend source
-COPY src/ src/
+COPY backend/ backend/
 COPY main.py ./
 
 # Copy built frontend from stage 1
-COPY --from=frontend-build /build/src/idunn/web_dist src/idunn/web_dist/
+COPY --from=frontend-build /build/backend/web_dist backend/web_dist/
 
 # Install the project itself
-RUN uv sync --frozen --no-dev
+RUN uv sync --no-dev
 
 ENV PORT=8000
 EXPOSE ${PORT}
@@ -48,4 +48,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Run with uv so the virtualenv is activated
-CMD ["uv", "run", "uvicorn", "idunn.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]

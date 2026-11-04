@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, UTC
 import pytest
 from hypothesis import given, strategies as st, settings, HealthCheck
 
-from idunn.models.inventory import (
+from backend.models.inventory import (
     Item,
     ItemCreate,
     Unit,

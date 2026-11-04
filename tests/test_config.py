@@ -3,7 +3,7 @@
 import os
 from unittest.mock import patch
 
-from idunn.config import Settings
+from backend.config import Settings
 
 
 def test_settings_loads_with_extra_env_vars() -> None:

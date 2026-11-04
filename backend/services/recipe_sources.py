@@ -346,7 +346,7 @@ class RecipeSourceReader:
         with TemporaryDirectory(prefix="idunn-video-") as directory:
             output = Path(directory) / "transcript.txt"
             process = await asyncio.create_subprocess_exec(
-                sys.executable, "-m", "idunn.services.youtube_transcribe",
+                sys.executable, "-m", "backend.services.youtube_transcribe",
                 url, str(output), self.config.whisper_model,
                 str(self.config.video_max_seconds), str(self.config.video_max_bytes),
                 str(int(self.config.whisper_local_files_only)),
