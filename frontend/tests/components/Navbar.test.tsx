@@ -51,4 +51,26 @@ describe('Navbar Component', () => {
 
     expect(handleTabChange).toHaveBeenCalledWith('pantry')
   })
+
+  // Verify clicking Cook AI tab switches active route.
+  it('triggers setActiveTab when Cook AI tab is clicked', () => {
+    const handleTabChange = mock(() => {})
+
+    const { getByText } = render(
+      <Navbar
+        activeTab="capture"
+        setActiveTab={handleTabChange}
+        recipeCount={2}
+        pantryCount={4}
+      />
+    )
+
+    const cookButton = getByText('Cook AI').closest('button')
+    expect(cookButton).toBeDefined()
+    if (cookButton) {
+      fireEvent.click(cookButton)
+    }
+
+    expect(handleTabChange).toHaveBeenCalledWith('cook')
+  })
 })

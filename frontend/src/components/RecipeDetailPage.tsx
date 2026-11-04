@@ -22,9 +22,10 @@ import {
   AlertTriangle,
   Loader2,
   X,
+  ShoppingBag,
 } from 'lucide-react'
 import type { DeductionReport, Recipe } from '../types'
-import { cookRecipe } from '../api'
+import { cookRecipe, addShoppingListBatch } from '../api'
 
 /**
  * Properties for RecipeDetailPage component.
@@ -68,6 +69,30 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
   const [cooking, setCooking] = useState(false)
   const [deductionReport, setDeductionReport] = useState<DeductionReport | null>(null)
   const [cookError, setCookError] = useState<string | null>(null)
+
+  // Track shopping list batch addition state.
+  const [addingToShoppingList, setAddingToShoppingList] = useState(false)
+  const [shoppingListSuccess, setShoppingListSuccess] = useState<string | null>(null)
+
+  // Add all recipe ingredients directly to shopping list.
+  const handleAddAllToShoppingList = async () => {
+    try {
+      setAddingToShoppingList(true)
+      const itemsToAdd = recipe.ingredients.map((ing) => ({
+        name: ing.name,
+        quantity: ing.quantity ? Math.round(ing.quantity * multiplier * 100) / 100 : 1,
+        unit: ing.unit || 'count',
+        recipe_id: recipeId,
+      }))
+      const res = await addShoppingListBatch(itemsToAdd)
+      setShoppingListSuccess(`Added ${res.length} items to shopping list`)
+      setTimeout(() => setShoppingListSuccess(null), 3000)
+    } catch (err: any) {
+      alert(err.message || 'Failed to add items to shopping list')
+    } finally {
+      setAddingToShoppingList(false)
+    }
+  }
 
   // Resolve recipe ID handling MongoDB (_id) and Supabase (id) naming conventions.
   const recipeId = recipe.id || recipe._id || ''
@@ -419,6 +444,28 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Add All Ingredients to Shopping List */}
+            <div className="mb-4">
+              <button
+                type="button"
+                onClick={handleAddAllToShoppingList}
+                disabled={addingToShoppingList}
+                className="w-full py-2 px-3 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center space-x-2 transition-colors disabled:opacity-50"
+              >
+                <ShoppingBag className="w-3.5 h-3.5 text-orange-400" />
+                <span>
+                  {addingToShoppingList
+                    ? 'Adding to Shopping List...'
+                    : 'Add All Ingredients to Shopping List'}
+                </span>
+              </button>
+              {shoppingListSuccess && (
+                <p className="text-xs text-emerald-400 text-center mt-1.5 font-medium">
+                  {shoppingListSuccess}
+                </p>
+              )}
             </div>
 
             {/* Ingredient Checklist items */}

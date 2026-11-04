@@ -11,6 +11,8 @@ import { CaptureZone } from './components/CaptureZone'
 import { RecipeVault } from './components/RecipeVault'
 import { RecipeDetailPage } from './components/RecipeDetailPage'
 import { PantryView } from './components/PantryView'
+import { CookAIView } from './components/CookAIView'
+import { ShoppingListView } from './components/ShoppingListView'
 import { SettingsView } from './components/SettingsView'
 
 /**
@@ -20,7 +22,9 @@ import { SettingsView } from './components/SettingsView'
  */
 export function App() {
   // Track active navigation tab. Defaults to 'capture' for fast recipe imports.
-  const [activeTab, setActiveTab] = useState<'capture' | 'vault' | 'pantry' | 'settings'>('capture')
+  const [activeTab, setActiveTab] = useState<
+    'capture' | 'vault' | 'pantry' | 'cook' | 'shopping' | 'settings'
+  >('capture')
 
   // Hold currently viewed recipe for dedicated full-page inspection.
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
@@ -77,9 +81,20 @@ export function App() {
 
   // Reset selected recipe detail view when switching main navigation tabs.
   // This prevents the user from remaining trapped in a detail view on unrelated tabs.
-  const handleTabChange = (tab: 'capture' | 'vault' | 'pantry' | 'settings') => {
+  const handleTabChange = (
+    tab: 'capture' | 'vault' | 'pantry' | 'cook' | 'shopping' | 'settings'
+  ) => {
     setSelectedRecipe(null)
     setActiveTab(tab)
+  }
+
+  // Navigate to recipe detail from Cook AI recommendation
+  const handleSelectRecipeFromCookAI = (recipeId: string) => {
+    const target = recipes.find((r) => (r.id || r._id) === recipeId)
+    if (target) {
+      setSelectedRecipe(target)
+      setActiveTab('vault')
+    }
   }
 
   // Prepend newly imported recipe and transition immediately to its detail view.
@@ -168,6 +183,16 @@ export function App() {
             onItemDeleted={handleItemDeleted}
           />
         )}
+
+        {activeTab === 'cook' && (
+          <CookAIView
+            onSelectRecipe={handleSelectRecipeFromCookAI}
+            onRecipeCreated={loadRecipes}
+            onOpenShoppingList={() => handleTabChange('shopping')}
+          />
+        )}
+
+        {activeTab === 'shopping' && <ShoppingListView />}
 
         {activeTab === 'settings' && <SettingsView onSettingsUpdated={loadSettings} />}
       </main>

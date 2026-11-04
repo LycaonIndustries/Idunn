@@ -7,11 +7,18 @@ import type {
   DeductionReport,
   InventoryCreate,
   InventoryItem,
+  PantryMatchResult,
+  PantryToPlateRequest,
+  PantryToPlateResponse,
   Receipt,
   ReceiptConfirmPayload,
   ReceiptConfirmResponse,
   Recipe,
   SettingsStatus,
+  ShoppingList,
+  ShoppingListCreate,
+  ShoppingListItem,
+  SubstitutionSuggestion,
   UpdateSettingsPayload,
 } from './types'
 
@@ -421,6 +428,162 @@ export async function cookRecipe(
   // Trigger backend FEFO deduction to keep pantry stock synchronized with cooked meals.
   const url = `${BASE_URL}/api/v1/recipes/${recipeId}/cook?servings_multiplier=${servingsMultiplier}`
   const res = await fetch(url, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Query recipes ranked by pantry coverage and expiry priority.
+ */
+export async function fetchWhatCanICook(
+  readyOnly: boolean = false,
+  maxMissing?: number | null,
+): Promise<PantryMatchResult[]> {
+  const params = new URLSearchParams()
+  params.set('ready_only', String(readyOnly))
+  if (maxMissing != null) {
+    params.set('max_missing', String(maxMissing))
+  }
+  const queryStr = params.toString() ? `?${params.toString()}` : ''
+  const res = await fetch(`${BASE_URL}/api/v1/cook-ai/what-can-i-cook${queryStr}`, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Query in-stock culinary substitutions for a missing ingredient.
+ */
+export async function fetchSubstitutions(
+  missingIngredient: string,
+): Promise<SubstitutionSuggestion | null> {
+  const res = await fetch(`${BASE_URL}/api/v1/cook-ai/substitutions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ missing_ingredient: missingIngredient }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Generate a custom meal proposal strictly using active pantry items and staples.
+ */
+export async function generatePantryMeal(
+  request: PantryToPlateRequest,
+): Promise<PantryToPlateResponse> {
+  const res = await fetch(`${BASE_URL}/api/v1/cook-ai/pantry-to-plate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Retrieve the active shopping list with items and total counts.
+ */
+export async function fetchShoppingList(): Promise<ShoppingList> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Add a single item to the shopping list.
+ */
+export async function addShoppingListItem(
+  payload: ShoppingListCreate,
+): Promise<ShoppingListItem> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Add multiple items to the shopping list in a batch.
+ */
+export async function addShoppingListBatch(
+  payloads: ShoppingListCreate[],
+): Promise<ShoppingListItem[]> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/batch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payloads),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Update the purchased status of a shopping list item.
+ */
+export async function updateShoppingListItem(
+  itemId: string,
+  isPurchased: boolean,
+): Promise<ShoppingListItem> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/${itemId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ is_purchased: isPurchased }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Remove an item from the shopping list.
+ */
+export async function deleteShoppingListItem(
+  itemId: string,
+): Promise<{ status: string }> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/${itemId}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Clear all purchased items from the shopping list.
+ */
+export async function clearPurchasedShoppingItems(): Promise<{ cleared_count: number }> {
+  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/clear-purchased`, {
     method: 'POST',
   })
   if (!res.ok) {

@@ -14,6 +14,15 @@ import {
   ingestText,
   ingestUrl,
   updateSettings,
+  fetchWhatCanICook,
+  fetchSubstitutions,
+  generatePantryMeal,
+  fetchShoppingList,
+  addShoppingListItem,
+  addShoppingListBatch,
+  updateShoppingListItem,
+  deleteShoppingListItem,
+  clearPurchasedShoppingItems,
 } from '../src/api'
 
 describe('API Client', () => {
@@ -349,5 +358,178 @@ describe('API Client', () => {
     expect(report.fully_satisfied).toBe(true)
     expect(report.deductions.length).toBe(1)
     expect(report.deductions[0].item_name).toBe('Toor Dal')
+  })
+
+  // Test what-can-i-cook endpoint.
+  it('fetchWhatCanICook fetches ranked recipe matches with ready_only filter', async () => {
+    const mockMatches = [
+      {
+        recipe_id: 'rec_101',
+        recipe_title: 'Jeera Aloo',
+        match_percentage: 100,
+        can_cook_now: true,
+        matched_ingredients: ['potato', 'cumin'],
+        missing_ingredients: [],
+        expiry_urgency_score: 5,
+        expiring_ingredients_used: ['potato'],
+      },
+    ]
+
+    globalThis.fetch = mock(async (url: any) => {
+      expect(String(url)).toContain('/api/v1/cook-ai/what-can-i-cook?ready_only=true')
+      return new Response(JSON.stringify(mockMatches), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as any
+
+    const results = await fetchWhatCanICook(true)
+    expect(results.length).toBe(1)
+    expect(results[0].recipe_title).toBe('Jeera Aloo')
+    expect(results[0].can_cook_now).toBe(true)
+  })
+
+  // Test substitution suggestions endpoint.
+  it('fetchSubstitutions returns culinary replacement suggestion', async () => {
+    const mockSub = {
+      missing_ingredient: 'sour cream',
+      substitute_item: 'yogurt',
+      ratio_or_amount: '1:1 ratio',
+      reason: 'Similar acidity and moisture profile',
+    }
+
+    globalThis.fetch = mock(async (url: any, init: any) => {
+      expect(String(url)).toContain('/api/v1/cook-ai/substitutions')
+      expect(init?.method).toBe('POST')
+      const body = JSON.parse(String(init?.body))
+      expect(body.missing_ingredient).toBe('sour cream')
+      return new Response(JSON.stringify(mockSub), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as any
+
+    const res = await fetchSubstitutions('sour cream')
+    expect(res?.substitute_item).toBe('yogurt')
+  })
+
+  // Test pantry-to-plate generative meal planner.
+  it('generatePantryMeal calls pantry-to-plate endpoint and receives recipe', async () => {
+    const mockResponse = {
+      title: 'Aloo Methi Stir Fry',
+      description: 'Quick skillet meal',
+      cuisine: 'North Indian',
+      prep_time_minutes: 10,
+      cook_time_minutes: 15,
+      servings: 2,
+      difficulty: 'easy',
+      ingredients: [{ name: 'potato', quantity: 2, unit: 'count' }],
+      steps: ['Chop potatoes', 'Cook with spices'],
+      used_expiring_items: ['potato'],
+      estimated_macros: { calories: 220, protein_g: 4, carbs_g: 35, fat_g: 8 },
+    }
+
+    globalThis.fetch = mock(async (url: any, init: any) => {
+      expect(String(url)).toContain('/api/v1/cook-ai/pantry-to-plate')
+      expect(init?.method).toBe('POST')
+      const body = JSON.parse(String(init?.body))
+      expect(body.dietary_preference).toBe('vegetarian')
+      return new Response(JSON.stringify(mockResponse), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as any
+
+    const result = await generatePantryMeal({ dietary_preference: 'vegetarian', max_prep_time_minutes: 30 })
+    expect(result.title).toBe('Aloo Methi Stir Fry')
+    expect(result.cook_time_minutes).toBe(15)
+  })
+
+  // Test shopping list operations.
+  it('manages shopping list: fetch, add, update, batch, and clear', async () => {
+    const mockList = {
+      items: [
+        {
+          id: 'shop_1',
+          name: 'Paneer',
+          quantity: 200,
+          unit: 'g',
+          is_purchased: false,
+          created_at: '2026-11-05T00:00:00Z',
+        },
+      ],
+    }
+
+    // 1. Fetch
+    globalThis.fetch = mock(async () => {
+      return new Response(JSON.stringify(mockList), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as any
+    const list = await fetchShoppingList()
+    expect(list.items.length).toBe(1)
+    expect(list.items[0].name).toBe('Paneer')
+
+    // 2. Add single item
+    globalThis.fetch = mock(async (_url: any, init: any) => {
+      expect(init?.method).toBe('POST')
+      return new Response(JSON.stringify({ ...mockList.items[0], id: 'shop_2', name: 'Curry Leaves' }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as any
+    const added = await addShoppingListItem({ name: 'Curry Leaves', quantity: 1, unit: 'count' })
+    expect(added.id).toBe('shop_2')
+
+    // 3. Batch add
+    globalThis.fetch = mock(async (_url: any, init: any) => {
+      expect(init?.method).toBe('POST')
+      return new Response(
+        JSON.stringify([
+          { ...mockList.items[0], id: 'shop_b1', name: 'Mustard Seeds' },
+          { ...mockList.items[0], id: 'shop_b2', name: 'Cumin Seeds' },
+        ]),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    }) as any
+    const batchRes = await addShoppingListBatch([{ name: 'Mustard Seeds', quantity: 50, unit: 'g' }])
+    expect(batchRes.length).toBe(2)
+
+    // 4. Update item status
+    globalThis.fetch = mock(async (_url: any, init: any) => {
+      expect(init?.method).toBe('PATCH')
+      return new Response(JSON.stringify({ ...mockList.items[0], is_purchased: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as any
+    const updated = await updateShoppingListItem('shop_1', true)
+    expect(updated.is_purchased).toBe(true)
+
+    // 5. Delete item
+    globalThis.fetch = mock(async (_url: any, init: any) => {
+      expect(init?.method).toBe('DELETE')
+      return new Response(JSON.stringify({ status: 'deleted' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as any
+    const deleted = await deleteShoppingListItem('shop_1')
+    expect(deleted.status).toBe('deleted')
+
+    // 6. Clear purchased
+    globalThis.fetch = mock(async (_url: any, init: any) => {
+      expect(init?.method).toBe('POST')
+      return new Response(JSON.stringify({ cleared_count: 3 }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as any
+    const cleared = await clearPurchasedShoppingItems()
+    expect(cleared.cleared_count).toBe(3)
   })
 })

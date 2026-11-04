@@ -4,16 +4,16 @@
  */
 
 import React from 'react'
-import { Sparkles, BookOpen, Package, ChefHat, Settings } from 'lucide-react'
+import { Sparkles, BookOpen, Package, ChefHat, Settings, Flame, ShoppingBag } from 'lucide-react'
 
 /**
  * Properties for the Navbar component.
  */
 interface NavbarProps {
   /** Active navigation tab key. */
-  activeTab: 'capture' | 'vault' | 'pantry' | 'settings'
+  activeTab: 'capture' | 'vault' | 'pantry' | 'cook' | 'shopping' | 'settings'
   /** Tab switch event handler. */
-  setActiveTab: (tab: 'capture' | 'vault' | 'pantry' | 'settings') => void
+  setActiveTab: (tab: 'capture' | 'vault' | 'pantry' | 'cook' | 'shopping' | 'settings') => void
   /** Total number of stored recipes for badge display. */
   recipeCount: number
   /** Total number of active pantry items for badge display. */
@@ -121,6 +121,32 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {pantryCount}
               </span>
             )}
+          </button>
+
+          {/* Cook AI Tab */}
+          <button
+            onClick={() => setActiveTab('cook')}
+            className={`flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+              activeTab === 'cook'
+                ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <Flame className="w-4 h-4 text-orange-400" />
+            <span>Cook AI</span>
+          </button>
+
+          {/* Shopping List Tab */}
+          <button
+            onClick={() => setActiveTab('shopping')}
+            className={`flex items-center space-x-2 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+              activeTab === 'shopping'
+                ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <ShoppingBag className="w-4 h-4" />
+            <span>Shopping</span>
           </button>
 
           {/* BYOK Settings Tab with warning beacon when unconfigured */}

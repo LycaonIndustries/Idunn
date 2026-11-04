@@ -301,3 +301,107 @@ export interface DeductionReport {
   fully_satisfied: boolean
 }
 
+// Match result comparing a recipe against active pantry inventory.
+export interface PantryMatchResult {
+  /** Target recipe ID. */
+  recipe_id: string
+  /** Recipe title. */
+  recipe_title: string
+  /** Coverage ratio of available ingredients (0 to 100). */
+  coverage_percentage: number
+  /** Ingredients present in pantry. */
+  matched_ingredients: string[]
+  /** Ingredients absent from pantry. */
+  missing_ingredients: string[]
+  /** Bonus score based on soon-to-expire perishables. */
+  expiry_urgency_score: number
+  /** True if all required ingredients are in stock. */
+  can_cook_now: boolean
+}
+
+// In-stock culinary substitution for a missing ingredient.
+export interface SubstitutionSuggestion {
+  /** Missing ingredient name. */
+  missing_ingredient: string
+  /** In-stock ingredient replacement. */
+  substitute_item: string
+  /** Proportional ratio or conversion note. */
+  ratio_or_amount: string
+  /** Culinary reasoning behind substitution. */
+  reason: string
+  /** Whether substitute is verified in pantry stock. */
+  in_stock: boolean
+}
+
+// Parameters for generating a dish from active pantry stock.
+export interface PantryToPlateRequest {
+  /** Optional dietary preference constraint. */
+  dietary_preference?: string | null
+  /** Optional prep and cooking time limit. */
+  max_prep_time_minutes?: number | null
+  /** Target serving portions. */
+  servings?: number
+  /** Regional flavor hint. */
+  cuisine_hint?: string | null
+}
+
+// Custom recipe created exclusively from in-stock ingredients and staples.
+export interface PantryToPlateResponse {
+  /** Recipe title. */
+  title: string
+  /** Summary description. */
+  description: string
+  /** Ingredients with quantities. */
+  ingredients: Array<{ item: string; amount: number; unit: string }>
+  /** Sequential preparation instructions. */
+  steps: string[]
+  /** Prep duration in minutes. */
+  prep_time_minutes: number
+  /** Cook duration in minutes. */
+  cook_time_minutes: number
+  /** Number of portions yielded. */
+  servings: number
+  /** Expiring ingredients utilized in the dish. */
+  used_expiring_items: string[]
+}
+
+// Persisted item on the grocery shopping list.
+export interface ShoppingListItem {
+  /** Item identifier. */
+  id: string
+  /** Name of the grocery item. */
+  name: string
+  /** Quantity to purchase. */
+  quantity: number
+  /** Unit of measurement. */
+  unit: string
+  /** Associated recipe ID if generated from recipe deficit. */
+  recipe_id?: string | null
+  /** Purchase completion flag. */
+  is_purchased: boolean
+  /** Creation timestamp. */
+  created_at?: string
+  /** Quick-commerce deep link URL. */
+  quick_commerce_url?: string
+}
+
+// Shopping list collection response.
+export interface ShoppingList {
+  /** Items on the list. */
+  items: ShoppingListItem[]
+  /** Total item count. */
+  total_count: number
+}
+
+// Creation payload for new shopping item.
+export interface ShoppingListCreate {
+  /** Grocery item name. */
+  name: string
+  /** Desired quantity. */
+  quantity: number
+  /** Unit of measurement. */
+  unit: string
+  /** Optional source recipe identifier. */
+  recipe_id?: string | null
+}
+
