@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Pre-push hook for Iðunn Kitchen OS
+# Verifies that .review.lock exists, signature is valid, and diff is within granularity limit
+
+uv run python scripts/dev_review.py --mode=verify

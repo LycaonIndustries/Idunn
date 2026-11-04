@@ -43,6 +43,14 @@ build-frontend:
 # Run all linters and test suites as a pre-push quality gate
 check: lint test
 
+# Run development review audit and update .review.lock
+review:
+    uv run python scripts/dev_review.py --mode=audit
+
+# Verify .review.lock matches current HEAD and satisfies granularity limits
+review-verify:
+    uv run python scripts/dev_review.py --mode=verify
+
 # Start fullstack development server
 dev:
     python main.py
