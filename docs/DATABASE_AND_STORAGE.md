@@ -8,7 +8,7 @@ Iðunn employs a flexible data layer configured via the `DATABASE_BACKEND` envir
 
 When `DATABASE_BACKEND=supabase` is configured, Iðunn connects using the modern Supabase Python client with RLS policies enabled.
 
-### Schema Definition (`supabase/schema.sql`)
+### Schema Definition (`db/schema.sql`)
 
 ```sql
 -- 1. Inventory Items Table

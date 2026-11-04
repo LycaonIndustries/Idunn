@@ -418,7 +418,7 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
                     <span>{copiedSql ? 'Copied to Clipboard!' : 'Copy SQL Schema Script'}</span>
                   </button>
                   <span className="text-slate-500 font-mono text-[11px]">
-                    or see file <code className="text-emerald-400">supabase/schema.sql</code>
+                    or see file <code className="text-emerald-400">db/schema.sql</code>
                   </span>
                 </div>
 

@@ -70,7 +70,7 @@ idunn/
 │   ├── API_REFERENCE.md
 │   ├── DATABASE_AND_STORAGE.md
 │   └── INGESTION_PIPELINE.md
-├── supabase/                  # PostgreSQL schema definitions & migrations
+├── db/                        # PostgreSQL schema definitions & migrations
 ├── tests/                     # Automated pytest suite (131 tests)
 ├── Dockerfile                 # Multi-stage production container build
 ├── docker-compose.yml         # Single-command orchestration
