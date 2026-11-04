@@ -62,3 +62,26 @@ export interface InventoryCreate {
   location: string
   expiry_date?: string | null
 }
+
+export interface SettingsStatus {
+  gemini_configured: boolean
+  gemini_api_key_masked?: string | null
+  gemini_model: string
+  anthropic_configured: boolean
+  anthropic_api_key_masked?: string | null
+  anthropic_model_extract: string
+  openai_configured: boolean
+  openai_api_key_masked?: string | null
+  voyage_configured: boolean
+  voyage_api_key_masked?: string | null
+  active_llm_provider: string
+  env_file_exists: boolean
+}
+
+export interface UpdateSettingsPayload {
+  gemini_api_key?: string
+  gemini_model?: string
+  anthropic_api_key?: string
+  openai_api_key?: string
+  voyage_api_key?: string
+}

@@ -1,4 +1,4 @@
-import type { InventoryCreate, InventoryItem, Recipe } from './types'
+import type { InventoryCreate, InventoryItem, Recipe, SettingsStatus, UpdateSettingsPayload } from './types'
 
 const BASE_URL = ''
 
@@ -128,4 +128,24 @@ export async function deleteInventoryItem(id: string): Promise<void> {
     method: 'DELETE',
   })
   if (!res.ok) throw new Error('Failed to delete item')
+}
+
+// Settings & BYOK
+export async function fetchSettingsStatus(): Promise<SettingsStatus> {
+  const res = await fetch(`${BASE_URL}/api/v1/settings`)
+  if (!res.ok) throw new Error('Failed to fetch settings status')
+  return res.json()
+}
+
+export async function updateSettings(payload: UpdateSettingsPayload): Promise<SettingsStatus> {
+  const res = await fetch(`${BASE_URL}/api/v1/settings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Failed to update settings')
+  }
+  return res.json()
 }

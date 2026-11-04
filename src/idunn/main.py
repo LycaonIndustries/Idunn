@@ -15,7 +15,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pymongo.errors import PyMongoError
 
-from .api import ingredients, inventory, recipes
+from .api import ingredients, inventory, recipes, settings as settings_api
 from .config import settings
 from .db import MongoClient
 from .db.schemas import setup_database_validation
@@ -69,6 +69,7 @@ app.add_middleware(
 app.include_router(inventory.router)
 app.include_router(ingredients.router)
 app.include_router(recipes.router)
+app.include_router(settings_api.router)
 
 
 @app.exception_handler(IngestError)

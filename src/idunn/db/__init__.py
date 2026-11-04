@@ -20,7 +20,10 @@ class MongoClient:
     def get_client(cls) -> AsyncIOMotorClient:
         """Get or create MongoDB client."""
         if cls._client is None:
-            cls._client = AsyncIOMotorClient(settings.mongodb_url)
+            cls._client = AsyncIOMotorClient(
+                settings.mongodb_url,
+                serverSelectionTimeoutMS=2000,
+            )
         return cls._client
 
     @classmethod

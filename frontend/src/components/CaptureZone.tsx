@@ -12,15 +12,22 @@ import {
   Plus,
   Clock,
   Users,
+  Settings as SettingsIcon,
 } from 'lucide-react'
 import type { Recipe } from '../types'
 import { ingestUrl, ingestText, ingestImage, ingestAudio, ingestVideo, createRecipe } from '../api'
 
 interface CaptureZoneProps {
   onRecipeSaved: (recipe: Recipe) => void
+  onNavigateToSettings?: () => void
+  isByokConfigured?: boolean
 }
 
-export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
+export const CaptureZone: React.FC<CaptureZoneProps> = ({
+  onRecipeSaved,
+  onNavigateToSettings,
+  isByokConfigured = true,
+}) => {
   const [stream, setStream] = useState<'image' | 'audio' | 'video' | 'url' | 'text'>('image')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -105,23 +112,42 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
       {/* Title */}
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight sm:text-4xl">
+        <h1 className="text-3xl font-extrabold text-slate-100 tracking-tight sm:text-4xl">
           Universal Recipe Ingestion
         </h1>
-        <p className="mt-2 text-base text-slate-600 max-w-2xl mx-auto">
+        <p className="mt-2 text-base text-slate-400 max-w-2xl mx-auto">
           Capture recipes from any source — cookbook photos, Instagram/TikTok reels, voice notes, WhatsApp messages, or blog URLs.
         </p>
       </div>
 
+      {/* BYOK Notice if not configured */}
+      {!isByokConfigured && onNavigateToSettings && (
+        <div className="mb-6 p-4 rounded-2xl bg-amber-950/40 border border-amber-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+          <div className="flex items-center space-x-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />
+            <p className="text-xs sm:text-sm text-amber-200">
+              <strong>BYOK Key Needed:</strong> Add a free Google Gemini key in Settings to extract recipes from reels, photos, and voice notes.
+            </p>
+          </div>
+          <button
+            onClick={onNavigateToSettings}
+            className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center space-x-1.5 flex-shrink-0 transition-colors"
+          >
+            <SettingsIcon className="w-3.5 h-3.5" />
+            <span>Configure BYOK</span>
+          </button>
+        </div>
+      )}
+
       {/* Stream Tabs */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 mb-6">
+      <div className="bg-slate-900/90 rounded-2xl shadow-sm border border-slate-800 p-2 mb-6">
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           <button
             onClick={() => { setStream('image'); setSelectedFile(null); setError(null); }}
-            className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               stream === 'image'
-                ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-sm'
-                : 'text-slate-600 hover:bg-slate-50'
+                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
+                : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
             }`}
           >
             <ImageIcon className="w-4 h-4" />
@@ -130,10 +156,10 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
 
           <button
             onClick={() => { setStream('audio'); setSelectedFile(null); setError(null); }}
-            className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               stream === 'audio'
-                ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-sm'
-                : 'text-slate-600 hover:bg-slate-50'
+                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
+                : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
             }`}
           >
             <Mic className="w-4 h-4" />
@@ -142,10 +168,10 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
 
           <button
             onClick={() => { setStream('video'); setSelectedFile(null); setError(null); }}
-            className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               stream === 'video'
-                ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-sm'
-                : 'text-slate-600 hover:bg-slate-50'
+                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
+                : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
             }`}
           >
             <Video className="w-4 h-4" />
@@ -154,10 +180,10 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
 
           <button
             onClick={() => { setStream('url'); setError(null); }}
-            className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               stream === 'url'
-                ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-sm'
-                : 'text-slate-600 hover:bg-slate-50'
+                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
+                : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
             }`}
           >
             <Globe className="w-4 h-4" />
@@ -166,10 +192,10 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
 
           <button
             onClick={() => { setStream('text'); setError(null); }}
-            className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+            className={`flex items-center justify-center space-x-2 py-3 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
               stream === 'text'
-                ? 'bg-orange-50 text-orange-600 border border-orange-200 shadow-sm'
-                : 'text-slate-600 hover:bg-slate-50'
+                ? 'bg-orange-500/20 text-orange-400 border border-orange-500/40 shadow-sm'
+                : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
             }`}
           >
             <FileText className="w-4 h-4" />
@@ -179,13 +205,13 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
       </div>
 
       {/* Input Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-8">
+      <div className="bg-slate-900/90 rounded-2xl shadow-sm border border-slate-800 p-6 mb-8">
         {stream === 'image' && (
           <div>
-            <div className="text-sm font-medium text-slate-700 mb-2">Upload Cookbook Photo or Recipe Screenshot</div>
+            <div className="text-sm font-medium text-slate-300 mb-2">Upload Cookbook Photo or Recipe Screenshot</div>
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-300 hover:border-orange-400 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-50 hover:bg-orange-50/20"
+              className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
             >
               <input
                 ref={fileInputRef}
@@ -194,10 +220,10 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
                 className="hidden"
                 onChange={handleFileChange}
               />
-              <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mx-auto mb-3">
+              <div className="w-12 h-12 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center justify-center mx-auto mb-3">
                 <Upload className="w-6 h-6" />
               </div>
-              <p className="text-sm font-medium text-slate-800">
+              <p className="text-sm font-medium text-slate-200">
                 {selectedFile ? selectedFile.name : 'Click to select or drop cookbook photo / screenshot'}
               </p>
               <p className="text-xs text-slate-500 mt-1">Supports JPEG, PNG, WebP up to 10 MB</p>
@@ -207,10 +233,10 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
 
         {stream === 'audio' && (
           <div>
-            <div className="text-sm font-medium text-slate-700 mb-2">Upload Voice Note or Spoken Recipe Audio</div>
+            <div className="text-sm font-medium text-slate-300 mb-2">Upload Voice Note or Spoken Recipe Audio</div>
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-300 hover:border-orange-400 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-50 hover:bg-orange-50/20"
+              className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
             >
               <input
                 ref={fileInputRef}
@@ -219,10 +245,10 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
                 className="hidden"
                 onChange={handleFileChange}
               />
-              <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mx-auto mb-3">
+              <div className="w-12 h-12 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center justify-center mx-auto mb-3">
                 <Mic className="w-6 h-6" />
               </div>
-              <p className="text-sm font-medium text-slate-800">
+              <p className="text-sm font-medium text-slate-200">
                 {selectedFile ? selectedFile.name : 'Click to select audio recording'}
               </p>
               <p className="text-xs text-slate-500 mt-1">Supports MP3, M4A, WAV, OGG, WebM up to 50 MB</p>
@@ -232,10 +258,10 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
 
         {stream === 'video' && (
           <div>
-            <div className="text-sm font-medium text-slate-700 mb-2">Upload Silent Cooking Reel or Short Video</div>
+            <div className="text-sm font-medium text-slate-300 mb-2">Upload Silent Cooking Reel or Short Video</div>
             <div
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-300 hover:border-orange-400 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-50 hover:bg-orange-50/20"
+              className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
             >
               <input
                 ref={fileInputRef}
@@ -244,10 +270,10 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
                 className="hidden"
                 onChange={handleFileChange}
               />
-              <div className="w-12 h-12 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center mx-auto mb-3">
+              <div className="w-12 h-12 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 flex items-center justify-center mx-auto mb-3">
                 <Video className="w-6 h-6" />
               </div>
-              <p className="text-sm font-medium text-slate-800">
+              <p className="text-sm font-medium text-slate-200">
                 {selectedFile ? selectedFile.name : 'Click to select cooking video clip'}
               </p>
               <p className="text-xs text-slate-500 mt-1">
@@ -259,26 +285,26 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
 
         {stream === 'url' && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Recipe URL</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Recipe URL</label>
             <input
               type="url"
               placeholder="https://hebbarskitchen.com/palak-paneer-recipe/ or YouTube link"
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+              className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
             />
           </div>
         )}
 
         {stream === 'text' && (
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Pasted Recipe or WhatsApp Forward</label>
+            <label className="block text-sm font-medium text-slate-300 mb-2">Pasted Recipe or WhatsApp Forward</label>
             <textarea
               rows={6}
               placeholder="Paste recipe ingredients, method, or WhatsApp message from your family..."
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
+              className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm"
             />
           </div>
         )}
@@ -287,13 +313,13 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex-1">
             {error && (
-              <div className="flex items-center space-x-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-200">
+              <div className="flex items-center space-x-2 text-sm text-red-400 bg-red-950/40 p-3 rounded-xl border border-red-800/80">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{error}</span>
               </div>
             )}
             {successMsg && (
-              <div className="flex items-center space-x-2 text-sm text-emerald-700 bg-emerald-50 p-3 rounded-lg border border-emerald-200">
+              <div className="flex items-center space-x-2 text-sm text-emerald-300 bg-emerald-950/40 p-3 rounded-xl border border-emerald-800/80">
                 <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                 <span>{successMsg}</span>
               </div>
@@ -303,12 +329,12 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
           <button
             onClick={handleExtract}
             disabled={loading}
-            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-medium text-sm flex items-center justify-center space-x-2 shadow-sm shadow-orange-500/20 transition-all"
+            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center space-x-2 shadow-lg shadow-orange-500/20 transition-all cursor-pointer"
           >
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Processing AI Multimodal Ingest...</span>
+                <span>Processing Multimodal Ingest...</span>
               </>
             ) : (
               <>
@@ -321,22 +347,22 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
 
       {/* Extracted Preview */}
       {preview && (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8 animate-in fade-in duration-300">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-6 gap-4">
+        <div className="bg-slate-900/90 rounded-2xl shadow-sm border border-slate-800 p-6 sm:p-8 animate-in fade-in duration-300">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 mb-6 gap-4">
             <div>
-              <span className="text-xs font-semibold px-2 py-1 rounded-md bg-orange-100 text-orange-700 uppercase tracking-wider">
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-orange-500/20 text-orange-400 border border-orange-500/30 uppercase tracking-wider">
                 Extracted Preview
               </span>
-              <h2 className="text-2xl font-bold text-slate-900 mt-2">{preview.title}</h2>
+              <h2 className="text-2xl font-bold text-slate-100 mt-2">{preview.title}</h2>
               {preview.description && (
-                <p className="text-sm text-slate-500 mt-1">{preview.description}</p>
+                <p className="text-sm text-slate-400 mt-1">{preview.description}</p>
               )}
             </div>
 
             <button
               onClick={handleSaveToVault}
               disabled={saving}
-              className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-sm flex items-center justify-center space-x-2 shadow-sm transition-all"
+              className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
             >
               {saving ? (
                 <>
@@ -353,25 +379,25 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
           </div>
 
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-slate-50 p-3 rounded-xl flex items-center space-x-3">
-              <Clock className="w-5 h-5 text-orange-500" />
+            <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex items-center space-x-3">
+              <Clock className="w-5 h-5 text-orange-400" />
               <div>
                 <p className="text-xs text-slate-500">Prep Time</p>
-                <p className="text-sm font-semibold text-slate-800">{preview.prep_time_minutes || 0} mins</p>
+                <p className="text-sm font-semibold text-slate-200">{preview.prep_time_minutes || 0} mins</p>
               </div>
             </div>
-            <div className="bg-slate-50 p-3 rounded-xl flex items-center space-x-3">
-              <Clock className="w-5 h-5 text-orange-500" />
+            <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex items-center space-x-3">
+              <Clock className="w-5 h-5 text-orange-400" />
               <div>
                 <p className="text-xs text-slate-500">Cook Time</p>
-                <p className="text-sm font-semibold text-slate-800">{preview.cook_time_minutes || 0} mins</p>
+                <p className="text-sm font-semibold text-slate-200">{preview.cook_time_minutes || 0} mins</p>
               </div>
             </div>
-            <div className="bg-slate-50 p-3 rounded-xl flex items-center space-x-3">
-              <Users className="w-5 h-5 text-orange-500" />
+            <div className="bg-slate-950/60 border border-slate-800 p-3 rounded-xl flex items-center space-x-3">
+              <Users className="w-5 h-5 text-orange-400" />
               <div>
                 <p className="text-xs text-slate-500">Servings</p>
-                <p className="text-sm font-semibold text-slate-800">{preview.servings || 2}</p>
+                <p className="text-sm font-semibold text-slate-200">{preview.servings || 2}</p>
               </div>
             </div>
           </div>
@@ -379,15 +405,15 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Ingredients */}
             <div>
-              <h3 className="font-semibold text-slate-900 text-base mb-3 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-200 text-base mb-3 flex items-center justify-between">
                 <span>Ingredients</span>
                 <span className="text-xs text-slate-500">{preview.ingredients.length} items</span>
               </h3>
-              <ul className="divide-y divide-slate-100 bg-slate-50/50 rounded-xl p-3 border border-slate-100">
+              <ul className="divide-y divide-slate-800/60 bg-slate-950/60 rounded-xl p-3 border border-slate-800">
                 {preview.ingredients.map((ing, i) => (
                   <li key={i} className="py-2 flex items-center justify-between text-sm">
-                    <span className="font-medium text-slate-800">{ing.name}</span>
-                    <span className="text-slate-500 font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">
+                    <span className="font-medium text-slate-200">{ing.name}</span>
+                    <span className="text-slate-400 font-mono text-xs bg-slate-900 px-2 py-0.5 rounded border border-slate-800">
                       {ing.quantity ? `${ing.quantity} ` : ''}{ing.unit || ''}
                     </span>
                   </li>
@@ -397,17 +423,17 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({ onRecipeSaved }) => {
 
             {/* Steps */}
             <div>
-              <h3 className="font-semibold text-slate-900 text-base mb-3 flex items-center justify-between">
+              <h3 className="font-semibold text-slate-200 text-base mb-3 flex items-center justify-between">
                 <span>Steps</span>
                 <span className="text-xs text-slate-500">{preview.steps.length} steps</span>
               </h3>
               <ol className="space-y-3">
                 {preview.steps.map((st, i) => (
                   <li key={i} className="flex space-x-3 text-sm">
-                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-orange-100 text-orange-700 font-semibold text-xs flex items-center justify-center">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30 font-semibold text-xs flex items-center justify-center">
                       {st.step_number || i + 1}
                     </span>
-                    <span className="text-slate-700 leading-relaxed">{st.instruction}</span>
+                    <span className="text-slate-300 leading-relaxed">{st.instruction}</span>
                   </li>
                 ))}
               </ol>
