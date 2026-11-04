@@ -192,3 +192,112 @@ export interface UpdateSettingsPayload {
   /** Voyage AI embedding key. */
   voyage_api_key?: string
 }
+
+// Candidate grocery line item parsed from OCR receipt image or invoice.
+// Allows users to modify shelf-life estimates or categories prior to pantry confirmation.
+export interface ReceiptItemCandidate {
+  /** Original unparsed OCR line text. */
+  raw_text: string
+  /** Standardized food ingredient name. */
+  name: string
+  /** Extracted numerical quantity. */
+  quantity: number
+  /** Standardized measurement unit (e.g. g, kg, ml, piece). */
+  unit: string
+  /** Food category (e.g. dairy, herb, vegetable, spice). */
+  category: string
+  /** Projected shelf life duration in days. */
+  estimated_shelf_life_days: number
+  /** Recommended kitchen storage zone (fridge, pantry, spice_box). */
+  suggested_location: string
+  /** Purchase price in INR if printed on bill. */
+  price?: number | null
+}
+
+// Receipt document tracking visual OCR upload runs.
+// Stored in backend to allow reviewing historical bills and pending confirmations.
+export interface Receipt {
+  /** Unique receipt document identifier. */
+  _id: string
+  /** Detected store or quick-commerce platform name. */
+  store_name: string
+  /** Purchase timestamp. */
+  purchase_date?: string
+  /** Candidate grocery items extracted from bill. */
+  items: ReceiptItemCandidate[]
+  /** Extraction confidence score between 0.0 and 1.0. */
+  confidence: number
+  /** Optional source image URL or preview data URI. */
+  raw_image_url?: string | null
+  /** Flag indicating whether items were confirmed into pantry. */
+  confirmed: boolean
+  /** Processing status (pending, confirmed, failed). */
+  status: string
+  /** Creation timestamp. */
+  created_at?: string
+}
+
+// Payload for committing candidate items into active kitchen pantry stock.
+export interface ReceiptConfirmPayload {
+  /** Target receipt identifier. */
+  receipt_id: string
+  /** Store or platform name attribution. */
+  store_name?: string | null
+  /** Selected and edited items to add to inventory. */
+  items: ReceiptItemCandidate[]
+}
+
+// Response returned after confirming receipt items into pantry stock.
+export interface ReceiptConfirmResponse {
+  /** Processed receipt identifier. */
+  receipt_id: string
+  /** Total count of items created in inventory. */
+  confirmed_count: number
+  /** Operation status string. */
+  status: string
+}
+
+// Record of a single pantry batch quantity decrement.
+export interface DeductionItem {
+  /** Database pantry item identifier. */
+  item_id: string
+  /** Name of the pantry item. */
+  item_name: string
+  /** Deducted quantity. */
+  deducted_quantity: number
+  /** Unit of measurement. */
+  unit: string
+  /** Whether the item reached zero quantity. */
+  depleted: boolean
+  /** Remaining available quantity in stock. */
+  remaining_quantity: number
+}
+
+// Missing ingredient deficit during recipe cooking.
+export interface IngredientShortage {
+  /** Missing ingredient name. */
+  ingredient_name: string
+  /** Total required quantity for the recipe. */
+  required_quantity: number
+  /** Quantity available in pantry. */
+  available_quantity: number
+  /** Missing quantity amount. */
+  missing_quantity: number
+  /** Unit of measurement. */
+  unit: string
+}
+
+// Summary report returned after deducting recipe ingredients from pantry stock.
+export interface DeductionReport {
+  /** Recipe identifier. */
+  recipe_id: string
+  /** Servings scale multiplier used. */
+  servings_multiplier: number
+  /** Pantry batch deductions made. */
+  deductions: DeductionItem[]
+  /** Ingredient deficits where pantry stock was insufficient. */
+  shortages: IngredientShortage[]
+  /** True if all ingredients were completely satisfied. */
+  fully_satisfied: boolean
+}
+

@@ -3,14 +3,17 @@
  */
 import { describe, expect, it, afterEach, mock } from 'bun:test'
 import {
-  fetchRecipes,
-  fetchInventory,
-  fetchSettingsStatus,
-  updateSettings,
+  confirmReceiptItems,
+  cookRecipe,
   createInventoryItem,
   deleteInventoryItem,
-  ingestUrl,
+  fetchInventory,
+  fetchRecipes,
+  fetchSettingsStatus,
+  ingestReceiptImage,
   ingestText,
+  ingestUrl,
+  updateSettings,
 } from './api'
 
 describe('API Client', () => {
@@ -240,5 +243,111 @@ describe('API Client', () => {
     const result = await ingestText('Basmati rice and cumin', 'Family Notebook')
     expect(result.title).toBe('Jeera Rice')
     expect(result.id).toBe('rec_888')
+  })
+
+  // Test receipt image ingestion.
+  it('ingestReceiptImage posts multipart form data and receives parsed receipt', async () => {
+    const mockReceipt = {
+      _id: 'rcpt_777',
+      store_name: 'Blinkit',
+      items: [
+        {
+          raw_text: 'Amul Milk 500ml',
+          name: 'Amul Milk',
+          quantity: 500,
+          unit: 'ml',
+          category: 'dairy',
+          estimated_shelf_life_days: 3,
+          suggested_location: 'fridge',
+        },
+      ],
+      confidence: 0.95,
+      confirmed: false,
+      status: 'pending',
+    }
+
+    globalThis.fetch = mock(async (url: any, init: any) => {
+      expect(String(url)).toContain('/api/v1/receipts/ingest/image')
+      expect(init?.method).toBe('POST')
+      expect(init?.body instanceof FormData).toBe(true)
+      return new Response(JSON.stringify(mockReceipt), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as any
+
+    const fakeFile = new File(['fake content'], 'bill.jpg', { type: 'image/jpeg' })
+    const receipt = await ingestReceiptImage(fakeFile, 'Blinkit')
+    expect(receipt._id).toBe('rcpt_777')
+    expect(receipt.store_name).toBe('Blinkit')
+    expect(receipt.items.length).toBe(1)
+  })
+
+  // Test receipt items confirmation.
+  it('confirmReceiptItems posts payload and returns confirmation count', async () => {
+    const confirmPayload = {
+      receipt_id: 'rcpt_777',
+      store_name: 'Blinkit',
+      items: [
+        {
+          raw_text: 'Amul Milk 500ml',
+          name: 'Amul Milk',
+          quantity: 500,
+          unit: 'ml',
+          category: 'dairy',
+          estimated_shelf_life_days: 3,
+          suggested_location: 'fridge',
+        },
+      ],
+    }
+
+    globalThis.fetch = mock(async (url: any, init: any) => {
+      expect(String(url)).toContain('/api/v1/receipts/confirm')
+      expect(init?.method).toBe('POST')
+      const body = JSON.parse(String(init?.body))
+      expect(body.receipt_id).toBe('rcpt_777')
+      return new Response(
+        JSON.stringify({ receipt_id: 'rcpt_777', confirmed_count: 1, status: 'confirmed' }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    }) as any
+
+    const res = await confirmReceiptItems(confirmPayload)
+    expect(res.confirmed_count).toBe(1)
+    expect(res.status).toBe('confirmed')
+  })
+
+  // Test cooking deduction endpoint.
+  it('cookRecipe posts recipe cook action and receives deduction report', async () => {
+    const mockReport = {
+      recipe_id: 'rec_555',
+      servings_multiplier: 1.5,
+      deductions: [
+        {
+          item_id: 'item_1',
+          item_name: 'Toor Dal',
+          deducted_quantity: 150,
+          unit: 'g',
+          depleted: false,
+          remaining_quantity: 350,
+        },
+      ],
+      shortages: [],
+      fully_satisfied: true,
+    }
+
+    globalThis.fetch = mock(async (url: any, init: any) => {
+      expect(String(url)).toContain('/api/v1/recipes/rec_555/cook?servings_multiplier=1.5')
+      expect(init?.method).toBe('POST')
+      return new Response(JSON.stringify(mockReport), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }) as any
+
+    const report = await cookRecipe('rec_555', 1.5)
+    expect(report.fully_satisfied).toBe(true)
+    expect(report.deductions.length).toBe(1)
+    expect(report.deductions[0].item_name).toBe('Toor Dal')
   })
 })

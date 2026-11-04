@@ -7,9 +7,11 @@ import {
   MapPin,
   RefreshCw,
   Loader2,
+  Receipt as ReceiptIcon,
 } from 'lucide-react'
 import type { InventoryCreate, InventoryItem } from '../types'
 import { createInventoryItem, deleteInventoryItem } from '../api'
+import { ReceiptScannerModal } from './ReceiptScannerModal'
 
 /**
  * Properties for the PantryView component.
@@ -61,6 +63,7 @@ export const PantryView: React.FC<PantryViewProps> = ({
 }) => {
   // Modal visibility state controls the new item entry form.
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showReceiptModal, setShowReceiptModal] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -145,6 +148,14 @@ export const PantryView: React.FC<PantryViewProps> = ({
             className="p-2.5 rounded-xl border border-slate-800 bg-slate-900/80 text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            onClick={() => setShowReceiptModal(true)}
+            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 font-medium text-sm flex items-center space-x-2 border border-slate-700 transition-all cursor-pointer shadow-md"
+          >
+            <ReceiptIcon className="w-4 h-4 text-emerald-400" />
+            <span>Scan Receipt</span>
           </button>
 
           <button
@@ -328,6 +339,12 @@ export const PantryView: React.FC<PantryViewProps> = ({
           </button>
         </div>
       )}
+      {/* Modal dialog for receipt and delivery bill scanning. */}
+      <ReceiptScannerModal
+        isOpen={showReceiptModal}
+        onClose={() => setShowReceiptModal(false)}
+        onConfirmed={() => onRefresh()}
+      />
     </div>
   )
 }

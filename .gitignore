@@ -85,6 +85,7 @@ backend/web_dist/
 
 # Node
 node_modules/
+*.tsbuildinfo
 
 # Package lock files (if managed dynamically)
 uv.lock

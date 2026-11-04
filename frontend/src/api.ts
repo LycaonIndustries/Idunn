@@ -4,8 +4,12 @@
  */
 
 import type {
+  DeductionReport,
   InventoryCreate,
   InventoryItem,
+  Receipt,
+  ReceiptConfirmPayload,
+  ReceiptConfirmResponse,
   Recipe,
   SettingsStatus,
   UpdateSettingsPayload,
@@ -341,6 +345,83 @@ export async function updateSettings(payload: UpdateSettingsPayload): Promise<Se
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Upload receipt image or screenshot for OCR and pantry item extraction.
+ *
+ * @param file - Receipt image file.
+ * @param storeHint - Optional store or app name.
+ * @returns Parsed Receipt entity with candidates and shelf-life estimates.
+ * @throws Error if extraction fails.
+ */
+export async function ingestReceiptImage(
+  file: File,
+  storeHint?: string,
+): Promise<Receipt> {
+  // Transmit image using multipart form data to allow binary payload transport.
+  const formData = new FormData()
+  formData.append('file', file)
+  if (storeHint) {
+    formData.append('store_hint', storeHint)
+  }
+
+  const res = await fetch(`${BASE_URL}/api/v1/receipts/ingest/image`, {
+    method: 'POST',
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Confirm candidate items from receipt OCR into active pantry stock.
+ *
+ * @param payload - Confirmation request payload.
+ * @returns Confirmation response with added count.
+ * @throws Error if confirmation fails.
+ */
+export async function confirmReceiptItems(
+  payload: ReceiptConfirmPayload,
+): Promise<ReceiptConfirmResponse> {
+  // Send verified items to commit into inventory stock collection.
+  const res = await fetch(`${BASE_URL}/api/v1/receipts/confirm`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Deduct ingredients used in cooking a recipe from pantry inventory.
+ *
+ * @param recipeId - Identifier of the cooked recipe.
+ * @param servingsMultiplier - Portion multiplier scaling factor.
+ * @returns DeductionReport detailing consumed pantry batches and shortages.
+ * @throws Error if cooking deduction fails.
+ */
+export async function cookRecipe(
+  recipeId: string,
+  servingsMultiplier: number = 1.0,
+): Promise<DeductionReport> {
+  // Trigger backend FEFO deduction to keep pantry stock synchronized with cooked meals.
+  const url = `${BASE_URL}/api/v1/recipes/${recipeId}/cook?servings_multiplier=${servingsMultiplier}`
+  const res = await fetch(url, {
+    method: 'POST',
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))

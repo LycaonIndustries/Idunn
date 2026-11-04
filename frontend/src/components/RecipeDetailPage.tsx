@@ -19,8 +19,12 @@ import {
   Utensils,
   Share2,
   Activity,
+  AlertTriangle,
+  Loader2,
+  X,
 } from 'lucide-react'
-import type { Recipe } from '../types'
+import type { DeductionReport, Recipe } from '../types'
+import { cookRecipe } from '../api'
 
 /**
  * Properties for RecipeDetailPage component.
@@ -60,6 +64,11 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
   // Visual confirmation timer for link clipboard copy.
   const [copied, setCopied] = useState(false)
 
+  // Track automatic pantry deduction request and result report.
+  const [cooking, setCooking] = useState(false)
+  const [deductionReport, setDeductionReport] = useState<DeductionReport | null>(null)
+  const [cookError, setCookError] = useState<string | null>(null)
+
   // Resolve recipe ID handling MongoDB (_id) and Supabase (id) naming conventions.
   const recipeId = recipe.id || recipe._id || ''
   const baseServings = recipe.servings || 2
@@ -90,6 +99,22 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
     }
   }
 
+  // Execute automatic ingredient deduction from pantry stock.
+  const handleCookRecipe = async () => {
+    if (!recipeId) return
+    setCooking(true)
+    setCookError(null)
+    try {
+      // Trigger backend FEFO deduction using current serving scaling multiplier.
+      const report = await cookRecipe(recipeId, multiplier)
+      setDeductionReport(report)
+    } catch (err: unknown) {
+      setCookError(err instanceof Error ? err.message : 'Failed to deduct ingredients.')
+    } finally {
+      setCooking(false)
+    }
+  }
+
   const totalTime = (recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)
   const nutrition = recipe.nutrition
 
@@ -106,6 +131,19 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
         </button>
 
         <div className="flex items-center space-x-2">
+          <button
+            onClick={handleCookRecipe}
+            disabled={cooking}
+            className="flex items-center space-x-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 px-3.5 py-1.5 rounded-xl transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
+          >
+            {cooking ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Utensils className="w-3.5 h-3.5" />
+            )}
+            <span>I Cooked This</span>
+          </button>
+
           <button
             onClick={handleShare}
             className="flex items-center space-x-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
@@ -503,6 +541,116 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Cooking deduction error alert banner */}
+      {cookError && (
+        <div className="fixed bottom-6 right-6 z-50 bg-red-950 border border-red-800 text-red-200 p-4 rounded-2xl shadow-2xl flex items-center space-x-3">
+          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+          <span className="text-sm">{cookError}</span>
+          <button
+            onClick={() => setCookError(null)}
+            className="text-red-400 hover:text-red-200 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Deduction Report Dialog */}
+      {deductionReport && (
+        <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-slate-900 rounded-2xl p-6 max-w-lg w-full shadow-2xl border border-slate-800 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center space-x-2">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400">
+                  <Utensils className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-100">Cooking Deduction Summary</h3>
+                  <p className="text-xs text-slate-400">
+                    Scaled for {deductionReport.servings_multiplier}x portions
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setDeductionReport(null)}
+                className="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Status overview */}
+            {deductionReport.fully_satisfied ? (
+              <div className="p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/60 text-xs text-emerald-300 flex items-center space-x-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+                <span>All ingredients were found and deducted from pantry using FEFO.</span>
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-xs text-amber-300 flex items-center space-x-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                <span>Cooked with partial pantry shortages. Check deficits below.</span>
+              </div>
+            )}
+
+            {/* Deducted items */}
+            {deductionReport.deductions.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
+                  Deducted From Pantry
+                </h4>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {deductionReport.deductions.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 rounded-lg bg-slate-950 border border-slate-800 flex items-center justify-between text-xs"
+                    >
+                      <span className="font-medium text-slate-200">{item.item_name}</span>
+                      <span className="text-slate-400">
+                        -{item.deducted_quantity} {item.unit}{' '}
+                        {item.depleted ? (
+                          <strong className="text-red-400">(Depleted)</strong>
+                        ) : (
+                          `(${item.remaining_quantity} left)`
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Missing Shortages */}
+            {deductionReport.shortages.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wider text-amber-400 mb-2">
+                  Pantry Shortages
+                </h4>
+                <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                  {deductionReport.shortages.map((shortage, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 rounded-lg bg-amber-950/30 border border-amber-800/50 flex items-center justify-between text-xs"
+                    >
+                      <span className="font-medium text-amber-200">{shortage.ingredient_name}</span>
+                      <span className="text-amber-400 font-semibold">
+                        Missing {shortage.missing_quantity} {shortage.unit}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => setDeductionReport(null)}
+              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-sm font-medium transition-colors cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
