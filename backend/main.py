@@ -16,7 +16,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pymongo.errors import PyMongoError
 
-from .api import ingredients, inventory, receipts, recipes
+from .api import cook_ai, ingredients, inventory, receipts, recipes
 from .api import settings as settings_api
 from .config import settings
 from .db import MongoClient
@@ -88,6 +88,7 @@ app.include_router(inventory.router)
 app.include_router(ingredients.router)
 app.include_router(recipes.router)
 app.include_router(receipts.router)
+app.include_router(cook_ai.router)
 app.include_router(settings_api.router)
 
 
