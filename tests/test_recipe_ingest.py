@@ -7,10 +7,10 @@ import pytest
 from bson import ObjectId
 from pymongo.errors import AutoReconnect
 
-from idunn.models.recipe import RecipeCreate
-from idunn.services.ingest_errors import ExtractionError, ProviderError
-from idunn.services.recipe_providers import ExtractedRecipe
-from idunn.services.recipe_sources import SourcePage
+from backend.models.recipe import RecipeCreate
+from backend.services.ingest_errors import ExtractionError, ProviderError
+from backend.services.recipe_providers import ExtractedRecipe
+from backend.services.recipe_sources import SourcePage
 
 
 def extracted(data, confidence=1):

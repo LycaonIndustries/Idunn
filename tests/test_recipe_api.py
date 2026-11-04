@@ -7,13 +7,13 @@ import pytest
 from bson import ObjectId
 from pymongo.errors import AutoReconnect
 
-from idunn.services.ingest_errors import (
+from backend.services.ingest_errors import (
     ExtractionError,
     ProviderError,
     ProviderNotConfiguredError,
     SourceError,
 )
-from idunn.services.recipe_sources import SourcePage
+from backend.services.recipe_sources import SourcePage
 
 
 def test_recipe_crud_and_timestamps(api_client, recipe_data):

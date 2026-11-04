@@ -5,9 +5,9 @@ from unittest.mock import AsyncMock, patch
 import httpx
 import pytest
 
-from idunn.config import Settings
-from idunn.services.ingest_errors import ProviderError, ProviderNotConfiguredError
-from idunn.services.recipe_providers import GeminiRecipeExtractor, RecipeTextExtractor
+from backend.config import Settings
+from backend.services.ingest_errors import ProviderError, ProviderNotConfiguredError
+from backend.services.recipe_providers import GeminiRecipeExtractor, RecipeTextExtractor
 
 
 @pytest.mark.asyncio

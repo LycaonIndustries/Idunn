@@ -16,17 +16,17 @@ from __future__ import annotations
 import pytest
 from mongomock_motor import AsyncMongoMockClient
 
-from idunn.api.recipes import get_ingest_service
-from idunn.db import get_db
-from idunn.main import app, WEB_DIST
-from idunn.services.recipe_ingest import RecipeIngestService
+from backend.api.recipes import get_ingest_service
+from backend.db import get_db
+from backend.main import app, WEB_DIST
+from backend.services.recipe_ingest import RecipeIngestService
 
 
 @pytest.fixture
 def spa_client():
     """TestClient with mock DB, no lifespan — same pattern as conftest.api_client."""
     from fastapi.testclient import TestClient
-    from idunn.config import Settings
+    from backend.config import Settings
 
     db = AsyncMongoMockClient()["idunn_test"]
     config = Settings(

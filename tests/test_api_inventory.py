@@ -9,8 +9,8 @@ import pytest
 from motor.motor_asyncio import AsyncIOMotorClient
 from fastapi.testclient import TestClient
 
-from idunn.main import app
-from idunn.models.inventory import Unit, Location
+from backend.main import app
+from backend.models.inventory import Unit, Location
 
 
 @pytest.fixture

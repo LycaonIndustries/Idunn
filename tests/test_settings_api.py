@@ -5,8 +5,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from idunn.config import settings
-from idunn.main import app
+from backend.config import settings
+from backend.main import app
 
 
 @pytest.fixture
@@ -29,7 +29,7 @@ def test_update_settings_byok(client, monkeypatch, tmp_path):
     """POST /api/v1/settings updates settings at runtime and returns new status."""
     # Temporarily point ENV_PATH to a temporary file
     test_env = tmp_path / ".env"
-    monkeypatch.setattr("idunn.api.settings.ENV_PATH", test_env)
+    monkeypatch.setattr("backend.api.settings.ENV_PATH", test_env)
 
     resp = client.post(
         "/api/v1/settings",

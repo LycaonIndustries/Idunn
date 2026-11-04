@@ -19,7 +19,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from idunn.models.inventory import (
+from backend.models.inventory import (
     Item,
     Location,
     Unit,

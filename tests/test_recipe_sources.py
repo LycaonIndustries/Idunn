@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from idunn.models.recipe import RecipeCreate
-from idunn.services import recipe_sources as sources
-from idunn.services.ingest_errors import ProviderNotConfiguredError, SourceError
-from idunn.services.recipe_providers import ExtractedRecipe
-from idunn.services.recipe_sources import (
+from backend.models.recipe import RecipeCreate
+from backend.services import recipe_sources as sources
+from backend.services.ingest_errors import ProviderNotConfiguredError, SourceError
+from backend.services.recipe_providers import ExtractedRecipe
+from backend.services.recipe_sources import (
     PageFetcher,
     RecipeSourceReader,
     SourcePage,

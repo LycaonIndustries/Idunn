@@ -1,178 +1,123 @@
-# Iðunn — Kitchen Inventory & Meal Planning
+<div align="center">
 
-> *In Norse myth, Iðunn guards the golden apples that keep the Æsir fresh. This app does the same for an Indian household kitchen — pantry known, fresh, regional, and useful.*
+# 🍏 Iðunn — Kitchen OS
 
-## Overview
+**An India-aware, multimodal kitchen operating system and recipe vault.**  
+*Track pantry inventory, ingest recipes from anywhere with photos and nutrition macros, and scale ingredients seamlessly.*
 
-Iðunn is an India-aware kitchen operating system that solves five frictions Western pantry apps don't address:
+[![Python](https://img.shields.io/badge/Python-3.13+-3776AB?style=flat&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev)
+[![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?style=flat&logo=supabase&logoColor=white)](https://supabase.com)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4_Dark_Mode-06B6D4?style=flat&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
+[![Tests](https://img.shields.io/badge/Tests-131_Passing-success?style=flat&logo=pytest&logoColor=white)](tests/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker&logoColor=white)](Dockerfile)
 
-1. **Invisible inventory** — vegetables rot unseen; dals and atta run out mid-cooking
-2. **Recipe–reality gap** — recipes live on YouTube, Instagram, notebooks, WhatsApp; bridging is manual
-3. **Western recipe corpus mismatch** — global apps don't index aloo-gobi or bisi-bele-bath
-4. **Macro/nutrition for Indian food is broken** — USDA-based DBs miss ghar-ka-khaana
-5. **Multi-cook households** — cooks, maids, and family members share the kitchen
+</div>
 
-## Current status — 2026-10-07
+---
 
-Inventory APIs and the Phase 2 recipe-import backend are built. Recipe imports support structured website data, blog/text extraction, a YouTube transcription path, ingredient matching, and a review API. The local suite has 107 passing tests. Live MongoDB/Atlas, model-service, audio and 100-recipe accuracy checks are still pending. See [Phase 2 progress](docs/PHASE2_PROGRESS.md) for verified results, configuration and remaining work.
+## Highlights
 
-## Product scope
+- **Multimodal AI Recipe Ingestion**: Import recipes directly from YouTube videos, food blogs, cookbook photos, WhatsApp forwards, or silent video reels.
+- **Dedicated Recipe Pages with Source Photos**: Automatically captures YouTube thumbnails, OpenGraph/Twitter card images, and screenshot photos, paired with interactive serving scalers (`0.5×` to `4×`).
+- **Nutritional Macro Intelligence**: Captures calories (kcal), protein, carbohydrates, fat, and fiber per serving.
+- **Pantry Tracking with Indian Regional Units**: FEFO (First-Expire-First-Out) pantry tracking supporting *katori*, *chamcha*, *paav*, grams, and kilograms.
+- **Zero-Friction Single-Command Launch**: Built-in in-memory fallback runs out of the box with zero external dependencies.
+- **BYOK (Bring Your Own Key) Settings**: Configure Gemini, Anthropic, or OpenAI API keys directly in the UI.
 
-- **Pantry tracking** with FEFO (First Expire First Out) ordering
-- **Indian unit conversions** (paav, katori, chamcha, tsp, kg, g)
-- **Recipe library** with multi-source ingest (YouTube, blogs, WhatsApp, family heirlooms)
-- **"What can I cook?"** — hybrid retrieval (vector + BM25 + reranking)
-- **Receipt OCR** with PaddleOCR + LLM parsing
-- **Macro-aware meal planner** using IFCT (Indian Food Composition Tables)
-- **Quick-commerce hand-off** — gap lists → Blinkit/Zepto deep links
-- **Family sharing** — export meal plans as images/PDFs for WhatsApp
+---
 
-## Tech Stack
+## Quickstart (Single Command)
 
-| Layer | Choice | Rationale |
-|-------|--------|-----------|
-| Language | Python 3.13 + uv | Fastest-growing AI stack |
-| Framework | FastAPI | Canonical Python API framework |
-| Validation | Pydantic v2 | Type-safe contracts end-to-end |
-| Agents | Pydantic AI | Type-safe tools, Anthropic integration |
-| Database | MongoDB Atlas (Vector + Search) | Single store for docs + embeddings + BM25 |
-| Hybrid search | `$scoreFusion` (RRF) | Native Atlas, no extra infra |
-| Reranker | Cohere Rerank 3 / BGE-reranker-large | Highest-ROI improvement |
-| Embeddings | Voyage AI / BGE-M3 | Multilingual (English + Hindi/regional) |
-| LLMs | Anthropic (Haiku 4.5, Sonnet 4.6) | Cost-aware, prompt caching |
-| OCR | PaddleOCR + Claude Vision | Cost-aware, accuracy-tuned |
-| ASR | Whisper (large-v3) | Multilingual cooking videos |
-| Async jobs | Arq + Redis | Lightweight, async-native |
-| Object store | MinIO / Cloudflare R2 | S3-compatible |
-| Frontend | Next.js 15 + React 19 | Reuses Frigg design system |
-| Evals | RAGAS, Promptfoo, Inspect AI | 2026 RAG-engineer baseline |
+### Option A: Docker (Recommended)
+
+Run everything (backend API + precompiled React SPA) in a single container:
+
+```bash
+docker compose up --build
+```
+
+Open [http://localhost:8000](http://localhost:8000) in your browser.
+
+---
+
+### Option B: Local Python Dev
+
+Using [`uv`](https://docs.astral.sh/uv/) (fast Python package manager):
+
+```bash
+# 1. Install dependencies
+uv sync
+
+# 2. Run everything in one command
+uv run main.py
+```
+
+*Or run uvicorn directly with hot reload:*
+```bash
+uv run uvicorn backend.main:app --reload --port 8000
+```
+
+The application automatically serves both the backend API and the frontend client at [http://127.0.0.1:8000](http://127.0.0.1:8000).
+
+---
 
 ## Project Structure
 
 ```
 idunn/
-├── src/idunn/
-│   ├── models/          # Pydantic models (Item, Ingredient, Recipe, etc.)
-│   ├── api/             # FastAPI route handlers
-│   ├── db/              # Database connection & schemas
-│   ├── services/        # Business logic (retrieval, OCR, planning)
-│   ├── config.py        # Configuration from environment
-│   └── main.py         # FastAPI application entry point
-├── tests/               # pytest test suite
-├── docs/
-│   └── adr/             # Architecture Decision Records
-├── config/              # Configuration files
-└── pyproject.toml       # Project metadata & dependencies
+├── backend/                  # FastAPI backend application
+│   ├── api/                  # REST route handlers (inventory, recipes, settings)
+│   ├── db/                   # Database router (Supabase, Mongo, in-memory)
+│   ├── models/               # Pydantic data schemas (Recipe, Item, Nutrition)
+│   ├── services/             # Ingestion pipelines, vision extraction, matching
+│   └── main.py               # Application entry point & SPA mount
+├── frontend/                 # React 19 + Tailwind CSS single-page app
+│   ├── src/components/       # CaptureZone, RecipeVault, RecipeDetailPage, etc.
+│   └── vite.config.ts        # Builds directly to backend/web_dist
+├── docs/                     # Technical documentation & architectural specs
+│   ├── ARCHITECTURE.md       # Topology and design patterns
+│   ├── API_REFERENCE.md      # REST endpoints and request/response payloads
+│   ├── DATABASE_AND_STORAGE.md # Supabase PostgreSQL & MongoDB schemas
+│   └── INGESTION_PIPELINE.md # Multi-source extraction architecture
+├── supabase/                 # Supabase schema definitions (schema.sql)
+├── tests/                    # Automated pytest test suite (131 tests)
+├── Dockerfile                # Multi-stage production container
+├── docker-compose.yml        # Orchestration configuration
+├── pyproject.toml            # Python packaging & tool configs
+└── main.py                   # Single-command runner
 ```
 
-## Development Phases
+---
 
-### Phase 1 — Inventory Core
-- Pydantic models: Item, Ingredient, Location, Unit, UnitConversion
-- CRUD via FastAPI; Mongo schema validation enabled
-- FEFO ordering + expiry alerts
-- Indian unit graph: chamcha ↔ tsp ↔ ml; katori ↔ cup ↔ ml
-- **Exit criteria:** add 50 mixed items; query "expiring this week" returns correctly
+## Configuration & Environment Variables
 
-### Phase 2 — Recipe Ingest (Current)
-- JSON-LD parser, Readability + LLM fallback, YouTube ingest
-- Ingredient normalization with embedding match
-- Review queue API with revision checks
-- Live service and 100-recipe accuracy gate still open
-
-### Phase 3 — Hybrid Retrieval
-- Atlas Vector + Search indices, $scoreFusion, cross-encoder reranker
-- Pydantic AI cook_advisor agent
-- RAGAS eval suite
-
-### Phase 4 — Receipt OCR
-- PaddleOCR pipeline + LLM line-item parser
-- Per-store extraction profiles
-
-### Phase 5 — Meal Planner + Shopping List
-- Weekly planner UI, auto-computed shopping lists
-- Quick-commerce deep links
-
-### Phase 6 — Indian Nutrition Layer
-- IFCT data ingest, per-recipe macro computation
-
-### Phase 7 — Eval, Ops, Polish
-- Promptfoo + Inspect AI suites, OTel tracing, caching
-
-## Getting Started
-
-### Prerequisites
-- Python 3.13+
-- [uv](https://github.com/astral-sh/uv) package manager
-- MongoDB 6.0+ (local or Atlas)
-- Redis (for async jobs)
-
-### Installation
+Copy `.env.example` to `.env` to configure cloud storage and AI providers:
 
 ```bash
-# Clone the repository
-cd idunn
+# Database (defaults to in-memory mock if unconfigured)
+DATABASE_BACKEND=supabase
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_KEY=your-supabase-key
 
-# Create .env from example
-cp .env.example .env
-# Edit .env with your configuration
-
-# Install dependencies
-uv sync
-
-# Start MongoDB and Redis (using Docker)
-docker run -d -p 27017:27017 --name mongo mongo:latest
-docker run -d -p 6379:6379 --name redis redis:latest
-
-# Run the development server
-uv run uvicorn idunn.main:app --reload
+# AI Vision & Extraction (or configure via in-app Settings)
+GEMINI_API_KEY=AIzaSy...
 ```
 
-### API Documentation
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-- OpenAPI spec: http://localhost:8000/openapi.json
+---
 
-## Architecture Decision Records
+## Documentation
 
-1. **[ADR-001](docs/adr/001-mongodb-atlas-as-only-store.md):** MongoDB Atlas as the only store
-2. **ADR-002:** Hybrid retrieval with $scoreFusion + cross-encoder reranker (Phase 3)
-3. **ADR-003:** Pydantic AI over LangGraph for V1 agents (Phase 3)
-4. **ADR-004:** Deterministic-first ingest with LLM repair fallback (Phase 2)
-5. **ADR-005:** Multi-cook household model (Phase 5)
-6. **ADR-006:** Indian unit graph design (Phase 1)
-7. **ADR-007:** RAGAS eval gate as release criterion (Phase 3)
-8. **ADR-008:** Quick-commerce as deep-link hand-off (Phase 5)
-9. **ADR-009:** Recipe crawl ethics (Phase 2)
+For technical specifications, refer to the documentation in [`docs/`](docs/):
 
-## Testing
+- [Architecture & Topology](docs/ARCHITECTURE.md)
+- [API Reference](docs/API_REFERENCE.md)
+- [Database Schema & Storage](docs/DATABASE_AND_STORAGE.md)
+- [Multimodal Ingestion Pipeline](docs/INGESTION_PIPELINE.md)
 
-```bash
-# Run isolated model, API and recipe-import tests (no database or model keys needed)
-uv run pytest
-
-# Run property-based tests (Hypothesis)
-uv run pytest tests/test_inventory.py tests/test_phase1_exit.py -v
-```
-
-Provider calls and Atlas vector queries are replaced at their boundaries in these tests. A real-server and labeled-recipe evaluation is a separate gate; see [Phase 2 progress](docs/PHASE2_PROGRESS.md).
-
-## Portfolio Highlights
-
-This project demonstrates:
-- **Python + FastAPI** — "Stack winning the AI race"
-- **Pydantic AI agents** — Type-safe tools with structured outputs
-- **Production RAG** — Hybrid retrieval, reranking, evals
-- **MongoDB Atlas Vector + Search** — Single store with $scoreFusion
-- **Multi-modal AI** — OCR, ASR, Vision LLM
-- **Eval-driven dev** — RAGAS, Promptfoo, Inspect AI
-- **Domain modeling** — Indian units, ingredients, regional taxonomy
+---
 
 ## License
 
-MIT
-
-## Design Document
-
-See the full design document at:
-`C:\Users\aesir\Work\Projects\Full\Mimir\300 - Work\320 - Personal\322 - Idunn\Idunn-design.md`
+MIT © [Lycaon Industries](https://github.com/LycaonIndustries)

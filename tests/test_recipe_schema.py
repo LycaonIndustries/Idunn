@@ -3,8 +3,8 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from idunn.db.recipe_search_indexes import vector_definition
-from idunn.db.schemas import RECIPES_SCHEMA, setup_database_validation
+from backend.db.recipe_search_indexes import vector_definition
+from backend.db.schemas import RECIPES_SCHEMA, setup_database_validation
 
 
 async def test_schema_setup_includes_recipes_and_uses_supplied_database():

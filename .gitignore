@@ -75,7 +75,18 @@ minio-data/
 .ipynb_checkpoints
 
 # Frontend build output (regenerated from frontend/)
-src/idunn/web_dist/
+backend/web_dist/
 
 # Node
 node_modules/
+
+# Package lock files (if managed dynamically)
+uv.lock
+
+# Agent plans, execution logs, and scratchpads
+docs/superpowers/
+plans/
+*plan*.md
+*summary*.md
+*.scratch.*
+

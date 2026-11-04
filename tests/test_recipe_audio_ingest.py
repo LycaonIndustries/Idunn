@@ -2,7 +2,7 @@
 
 from unittest.mock import AsyncMock
 
-from idunn.services.recipe_ingest import IngestResult
+from backend.services.recipe_ingest import IngestResult
 
 
 def test_ingest_audio_success(api_client, service, monkeypatch):

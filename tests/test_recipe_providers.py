@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from idunn.services import recipe_providers as providers
-from idunn.services.ingest_errors import ExtractionError, ProviderError
-from idunn.services.recipe_providers import RecipeTextExtractor, VoyageEmbedder
+from backend.services import recipe_providers as providers
+from backend.services.ingest_errors import ExtractionError, ProviderError
+from backend.services.recipe_providers import RecipeTextExtractor, VoyageEmbedder
 
 
 @pytest.mark.parametrize("rows", [
