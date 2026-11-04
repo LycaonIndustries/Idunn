@@ -1,3 +1,4 @@
+# Dependabot configuration for Idunn
 version: 2
 updates:
   # Python backend dependencies (pyproject.toml)
