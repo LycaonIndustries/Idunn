@@ -42,11 +42,19 @@ SYSTEM_EXTRACTION_PROMPT = (
     '    "prep_time_minutes": 10,\n'
     '    "cook_time_minutes": 20,\n'
     '    "servings": 4,\n'
-    '    "cuisine_type": "veg"\n'
+    '    "cuisine_type": "veg",\n'
+    '    "nutrition": {\n'
+    '      "calories": 280,\n'
+    '      "protein": 9.5,\n'
+    '      "carbs": 38.0,\n'
+    '      "fat": 8.0,\n'
+    '      "fiber": 4.5\n'
+    '    }\n'
     "  },\n"
     '  "confidence": 0.95\n'
     "}\n"
     "Always use the keys 'recipe', 'title', 'ingredients', 'steps', and 'confidence'. "
+    "Always estimate or extract nutritional information per serving if possible (calories in kcal, protein, carbs, fat, fiber in grams). "
     "If there is no recipe, set confidence to 0 and ingredients/steps to empty lists."
 )
 

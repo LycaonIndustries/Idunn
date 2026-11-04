@@ -9,6 +9,7 @@ interface RecipeVaultProps {
   onRefresh: () => void
   onDeleteRecipe: (id: string) => void
   onNavigateToCapture: () => void
+  onSelectRecipe?: (recipe: Recipe) => void
 }
 
 export const RecipeVault: React.FC<RecipeVaultProps> = ({
@@ -17,6 +18,7 @@ export const RecipeVault: React.FC<RecipeVaultProps> = ({
   onRefresh,
   onDeleteRecipe,
   onNavigateToCapture,
+  onSelectRecipe,
 }) => {
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState<string>('all')
@@ -107,7 +109,12 @@ export const RecipeVault: React.FC<RecipeVaultProps> = ({
       {filtered.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((recipe, idx) => (
-            <RecipeCard key={recipe.id || recipe._id || idx} recipe={recipe} onDelete={onDeleteRecipe} />
+            <RecipeCard
+              key={recipe.id || recipe._id || idx}
+              recipe={recipe}
+              onDelete={onDeleteRecipe}
+              onSelect={onSelectRecipe}
+            />
           ))}
         </div>
       ) : (

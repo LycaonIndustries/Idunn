@@ -110,7 +110,7 @@ class RecipeBase(BaseModel):
     source_name: str | None = Field(
         None, max_length=100, description="Source name (e.g., 'Hebbar's Kitchen')"
     )
-    image_url: str | None = Field(None, max_length=500, description="Recipe image URL")
+    image_url: str | None = Field(None, max_length=5_000_000, description="Recipe image URL or data URI")
     video_url: str | None = Field(None, max_length=500, description="Video URL (YouTube)")
     tags: list[str] = Field(default_factory=list, description="Tags (e.g., 'lunch', 'dinner')")
     nutrition: NutritionInfo | None = Field(None, description="Nutrition per serving")

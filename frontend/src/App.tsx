@@ -4,11 +4,13 @@ import { fetchInventory, fetchRecipes, deleteRecipe, fetchSettingsStatus } from 
 import { Navbar } from './components/Navbar'
 import { CaptureZone } from './components/CaptureZone'
 import { RecipeVault } from './components/RecipeVault'
+import { RecipeDetailPage } from './components/RecipeDetailPage'
 import { PantryView } from './components/PantryView'
 import { SettingsView } from './components/SettingsView'
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'capture' | 'vault' | 'pantry' | 'settings'>('capture')
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [settingsStatus, setSettingsStatus] = useState<SettingsStatus | null>(null)
@@ -54,14 +56,24 @@ export function App() {
     loadSettings()
   }, [loadRecipes, loadInventory, loadSettings])
 
+  const handleTabChange = (tab: 'capture' | 'vault' | 'pantry' | 'settings') => {
+    setSelectedRecipe(null)
+    setActiveTab(tab)
+  }
+
   const handleRecipeSaved = (newRecipe: Recipe) => {
     setRecipes((prev) => [newRecipe, ...prev])
+    setSelectedRecipe(newRecipe)
+    setActiveTab('vault')
   }
 
   const handleDeleteRecipe = async (id: string) => {
     try {
       await deleteRecipe(id)
       setRecipes((prev) => prev.filter((r) => (r.id || r._id) !== id))
+      if (selectedRecipe && (selectedRecipe.id || selectedRecipe._id) === id) {
+        setSelectedRecipe(null)
+      }
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Delete failed')
     }
@@ -85,7 +97,7 @@ export function App() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-orange-500/30 selection:text-orange-200">
       <Navbar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={handleTabChange}
         recipeCount={recipes.length}
         pantryCount={inventory.length}
         isByokConfigured={isByokConfigured}
@@ -95,19 +107,28 @@ export function App() {
         {activeTab === 'capture' && (
           <CaptureZone
             onRecipeSaved={handleRecipeSaved}
-            onNavigateToSettings={() => setActiveTab('settings')}
+            onNavigateToSettings={() => handleTabChange('settings')}
             isByokConfigured={isByokConfigured}
           />
         )}
 
         {activeTab === 'vault' && (
-          <RecipeVault
-            recipes={recipes}
-            loading={recipesLoading}
-            onRefresh={loadRecipes}
-            onDeleteRecipe={handleDeleteRecipe}
-            onNavigateToCapture={() => setActiveTab('capture')}
-          />
+          selectedRecipe ? (
+            <RecipeDetailPage
+              recipe={selectedRecipe}
+              onBack={() => setSelectedRecipe(null)}
+              onDelete={handleDeleteRecipe}
+            />
+          ) : (
+            <RecipeVault
+              recipes={recipes}
+              loading={recipesLoading}
+              onRefresh={loadRecipes}
+              onDeleteRecipe={handleDeleteRecipe}
+              onNavigateToCapture={() => handleTabChange('capture')}
+              onSelectRecipe={(recipe) => setSelectedRecipe(recipe)}
+            />
+          )
         )}
 
         {activeTab === 'pantry' && (

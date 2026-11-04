@@ -23,7 +23,7 @@ from pydantic import ValidationError
 from readability import Document
 from scrape_schema_recipe import loads
 
-from ..models.recipe import IngredientItem, RecipeCreate, Step
+from ..models.recipe import IngredientItem, NutritionInfo, RecipeCreate, Step
 from .ingest_errors import ProviderNotConfiguredError, SourceError
 from .recipe_providers import ExtractedRecipe, RecipeTextExtractor
 
@@ -188,6 +188,51 @@ def duration_minutes(value: Any) -> int | None:
     return None
 
 
+def extract_meta_image(html: str) -> str | None:
+    try:
+        soup = BeautifulSoup(html[:100000], "html.parser")
+        meta = (
+            soup.find("meta", property="og:image")
+            or soup.find("meta", attrs={"name": "og:image"})
+            or soup.find("meta", attrs={"name": "twitter:image"})
+            or soup.find("meta", property="twitter:image")
+        )
+        if meta and meta.get("content"):
+            img = str(meta["content"]).strip()
+            if img.startswith(("http://", "https://")):
+                return img
+    except Exception:
+        pass
+    return None
+
+
+def parse_nutrition(raw: Any) -> NutritionInfo | None:
+    if not isinstance(raw, dict):
+        return None
+
+    def extract_float(v: Any) -> float | None:
+        if v is None:
+            return None
+        m = re.search(r"(\d+(\.\d+)?)", str(v))
+        return float(m.group(1)) if m else None
+
+    calories = extract_float(raw.get("calories"))
+    protein = extract_float(raw.get("proteinContent"))
+    carbs = extract_float(raw.get("carbohydrateContent"))
+    fat = extract_float(raw.get("fatContent"))
+    fiber = extract_float(raw.get("fiberContent"))
+
+    if any(x is not None for x in (calories, protein, carbs, fat, fiber)):
+        return NutritionInfo(
+            calories=calories,
+            protein=protein,
+            carbs=carbs,
+            fat=fat,
+            fiber=fiber,
+        )
+    return None
+
+
 def structured_recipe(page: SourcePage) -> RecipeCreate | None:
     try:
         candidates = loads(page.html)
@@ -209,7 +254,10 @@ def structured_recipe(page: SourcePage) -> RecipeCreate | None:
             image = urljoin(page.url, image) if isinstance(image, str) else None
             if image and urlsplit(image).scheme not in {"http", "https"}:
                 image = None
+            if not image:
+                image = extract_meta_image(page.html)
             servings = re.search(r"\d+", str(raw.get("recipeYield", "")))
+            nutrition = parse_nutrition(raw.get("nutrition"))
             recipe = RecipeCreate(
                 title=clean_text(raw.get("name", "")),
                 description=clean_text(raw["description"]) if raw.get("description") else None,
@@ -222,6 +270,7 @@ def structured_recipe(page: SourcePage) -> RecipeCreate | None:
                 cook_time_minutes=duration_minutes(raw.get("cookTime")),
                 servings=int(servings[0]) if servings else None,
                 image_url=image,
+                nutrition=nutrition,
                 source_url=page.url,
                 source_name=urlsplit(page.url).hostname,
             )
@@ -269,6 +318,9 @@ class RecipeSourceReader:
             extracted.recipe.source_url = video
             extracted.recipe.video_url = video
             extracted.recipe.source_name = "YouTube"
+            video_id = parse_qs(urlsplit(video).query).get("v", [""])[0]
+            if video_id and not extracted.recipe.image_url:
+                extracted.recipe.image_url = f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
             return extracted, "youtube"
         page = await self.fetcher.fetch(url)
         recipe = await asyncio.to_thread(structured_recipe, page)
@@ -278,6 +330,8 @@ class RecipeSourceReader:
         extracted = await self.extractor.extract(article)
         extracted.recipe.source_url = page.url
         extracted.recipe.source_name = urlsplit(page.url).hostname
+        if not extracted.recipe.image_url:
+            extracted.recipe.image_url = extract_meta_image(page.html)
         return extracted, "blog"
 
     async def from_text(self, text: str, source_name: str) -> tuple[ExtractedRecipe, str]:

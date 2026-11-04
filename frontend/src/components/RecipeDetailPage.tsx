@@ -1,0 +1,446 @@
+import React, { useState } from 'react'
+import {
+  ArrowLeft,
+  Clock,
+  Users,
+  Flame,
+  ChefHat,
+  ExternalLink,
+  Trash2,
+  Check,
+  CheckCircle2,
+  Sparkles,
+  Utensils,
+  Share2,
+  Activity,
+} from 'lucide-react'
+import type { Recipe } from '../types'
+
+interface RecipeDetailPageProps {
+  recipe: Recipe
+  onBack: () => void
+  onDelete: (id: string) => void
+}
+
+export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
+  recipe,
+  onBack,
+  onDelete,
+}) => {
+  const [multiplier, setMultiplier] = useState<number>(1)
+  const [checkedIngredients, setCheckedIngredients] = useState<Record<number, boolean>>({})
+  const [activeStep, setActiveStep] = useState<number | null>(null)
+  const [completedSteps, setCompletedSteps] = useState<Record<number, boolean>>({})
+  const [copied, setCopied] = useState(false)
+
+  const recipeId = recipe.id || recipe._id || ''
+  const baseServings = recipe.servings || 2
+  const currentServings = Math.round(baseServings * multiplier * 10) / 10
+
+  const toggleIngredient = (idx: number) => {
+    setCheckedIngredients((prev) => ({ ...prev, [idx]: !prev[idx] }))
+  }
+
+  const toggleStep = (stepNum: number) => {
+    setCompletedSteps((prev) => ({ ...prev, [stepNum]: !prev[stepNum] }))
+  }
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleDelete = () => {
+    if (window.confirm(`Are you sure you want to delete "${recipe.title}" from your vault?`)) {
+      onDelete(recipeId)
+      onBack()
+    }
+  }
+
+  const totalTime = (recipe.prep_time_minutes || 0) + (recipe.cook_time_minutes || 0)
+  const nutrition = recipe.nutrition
+
+  return (
+    <div className="max-w-5xl mx-auto py-6 px-4 sm:px-6">
+      {/* Top Bar Navigation */}
+      <div className="flex items-center justify-between mb-6">
+        <button
+          onClick={onBack}
+          className="flex items-center space-x-2 text-slate-400 hover:text-orange-400 transition-colors text-sm font-medium py-1.5 px-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          <span>Back to Vault</span>
+        </button>
+
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={handleShare}
+            className="flex items-center space-x-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+            <span>{copied ? 'Link Copied' : 'Share'}</span>
+          </button>
+
+          <button
+            onClick={handleDelete}
+            title="Delete recipe"
+            className="text-slate-400 hover:text-red-400 bg-slate-900 border border-slate-800 p-2 rounded-xl transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Hero Header Card */}
+      <div className="relative rounded-3xl overflow-hidden border border-slate-800 bg-slate-900/90 shadow-2xl mb-8">
+        {recipe.image_url ? (
+          <div className="relative w-full h-72 sm:h-96 overflow-hidden bg-slate-950">
+            <img
+              src={recipe.image_url}
+              alt={recipe.title}
+              className="w-full h-full object-cover object-center transform hover:scale-105 transition-transform duration-700"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/60 to-transparent" />
+          </div>
+        ) : (
+          <div className="relative w-full h-48 sm:h-56 bg-gradient-to-br from-orange-950/40 via-slate-900 to-slate-950 flex items-center justify-center border-b border-slate-800">
+            <div className="text-center p-6">
+              <div className="w-16 h-16 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-400 flex items-center justify-center mx-auto mb-3 shadow-inner">
+                <ChefHat className="w-8 h-8" />
+              </div>
+              <p className="text-xs uppercase tracking-wider text-orange-400 font-semibold">Iðunn Vault Recipe</p>
+            </div>
+          </div>
+        )}
+
+        {/* Content Overlay / Info */}
+        <div className="p-6 sm:p-8 -mt-16 sm:-mt-24 relative z-10">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            {recipe.cuisine_type && (
+              <span
+                className={`text-xs font-semibold px-3 py-1 rounded-full border shadow-sm ${
+                  recipe.cuisine_type === 'veg'
+                    ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60'
+                    : 'bg-rose-950/80 text-rose-400 border-rose-800/60'
+                }`}
+              >
+                {recipe.cuisine_type.toUpperCase()}
+              </span>
+            )}
+            {recipe.region && (
+              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-slate-800/90 text-slate-300 border border-slate-700">
+                {recipe.region.replace('_', ' ')}
+              </span>
+            )}
+            {recipe.difficulty && (
+              <span className="text-xs font-semibold px-3 py-1 rounded-full bg-slate-800/90 text-slate-300 border border-slate-700">
+                {recipe.difficulty}
+              </span>
+            )}
+            {recipe.source_name && (
+              <span className="text-xs text-slate-400 bg-slate-950/70 border border-slate-800 px-3 py-1 rounded-full flex items-center gap-1.5">
+                <span>Via {recipe.source_name}</span>
+                {recipe.source_url && (
+                  <a
+                    href={recipe.source_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-orange-400 hover:text-orange-300 inline-flex items-center"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </span>
+            )}
+          </div>
+
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-50 tracking-tight leading-tight mb-3">
+            {recipe.title}
+          </h1>
+
+          {recipe.description && (
+            <p className="text-base text-slate-300 leading-relaxed max-w-3xl mb-6">
+              {recipe.description}
+            </p>
+          )}
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950/80 border border-slate-800/90 rounded-2xl p-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                <Clock className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-400 font-medium">Total Time</div>
+                <div className="text-sm font-bold text-slate-100">{totalTime ? `${totalTime} min` : 'Unspecified'}</div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-400 font-medium">Servings</div>
+                <div className="text-sm font-bold text-slate-100">{currentServings}</div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <Flame className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-400 font-medium">Prep / Cook</div>
+                <div className="text-sm font-bold text-slate-100">
+                  {recipe.prep_time_minutes || 0}m / {recipe.cook_time_minutes || 0}m
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <div className="p-2.5 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="text-xs text-slate-400 font-medium">Ingredients</div>
+                <div className="text-sm font-bold text-slate-100">{recipe.ingredients.length} items</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Nutrition Information Panel */}
+      <div className="bg-slate-900/90 rounded-3xl border border-slate-800 p-6 sm:p-7 shadow-lg mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-2.5">
+            <div className="p-2 rounded-xl bg-orange-500/10 text-orange-400 border border-orange-500/20">
+              <Activity className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-100">Nutritional Facts</h2>
+              <p className="text-xs text-slate-400">Captured & calculated per serving</p>
+            </div>
+          </div>
+          {nutrition?.calories && (
+            <div className="text-right">
+              <span className="text-2xl font-black text-orange-400">{nutrition.calories}</span>
+              <span className="text-xs font-semibold text-slate-400 ml-1">kcal</span>
+            </div>
+          )}
+        </div>
+
+        {nutrition ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+            <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
+              <div className="text-xs text-slate-400 font-medium mb-1">Protein</div>
+              <div className="text-lg font-bold text-emerald-400">
+                {nutrition.protein !== null && nutrition.protein !== undefined ? `${nutrition.protein}g` : '—'}
+              </div>
+              <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-full rounded-full"
+                  style={{ width: `${Math.min(100, ((nutrition.protein || 0) / 30) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
+              <div className="text-xs text-slate-400 font-medium mb-1">Carbohydrates</div>
+              <div className="text-lg font-bold text-amber-400">
+                {nutrition.carbs !== null && nutrition.carbs !== undefined ? `${nutrition.carbs}g` : '—'}
+              </div>
+              <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                <div
+                  className="bg-amber-500 h-full rounded-full"
+                  style={{ width: `${Math.min(100, ((nutrition.carbs || 0) / 60) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
+              <div className="text-xs text-slate-400 font-medium mb-1">Total Fat</div>
+              <div className="text-lg font-bold text-rose-400">
+                {nutrition.fat !== null && nutrition.fat !== undefined ? `${nutrition.fat}g` : '—'}
+              </div>
+              <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                <div
+                  className="bg-rose-500 h-full rounded-full"
+                  style={{ width: `${Math.min(100, ((nutrition.fat || 0) / 25) * 100)}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3.5">
+              <div className="text-xs text-slate-400 font-medium mb-1">Dietary Fiber</div>
+              <div className="text-lg font-bold text-sky-400">
+                {nutrition.fiber !== null && nutrition.fiber !== undefined ? `${nutrition.fiber}g` : '—'}
+              </div>
+              <div className="w-full bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                <div
+                  className="bg-sky-500 h-full rounded-full"
+                  style={{ width: `${Math.min(100, ((nutrition.fiber || 0) / 10) * 100)}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 text-center text-sm text-slate-400">
+            Nutrition information is being estimated from recipe ingredients. Macro breakdown will appear once synced.
+          </div>
+        )}
+      </div>
+
+      {/* Main Recipe Body (Ingredients & Steps) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Ingredients Column */}
+        <div className="lg:col-span-5 space-y-6">
+          <div className="bg-slate-900/90 rounded-3xl border border-slate-800 p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <Utensils className="w-5 h-5 text-orange-400" />
+                <h2 className="text-lg font-bold text-slate-100">Ingredients</h2>
+              </div>
+              <span className="text-xs text-slate-400">{recipe.ingredients.length} items</span>
+            </div>
+
+            {/* Serving Scaler */}
+            <div className="bg-slate-950/70 border border-slate-800/80 rounded-2xl p-3.5 mb-5">
+              <div className="text-xs font-medium text-slate-400 mb-2 flex items-center justify-between">
+                <span>Scale Servings:</span>
+                <span className="text-orange-400 font-bold">{currentServings} servings</span>
+              </div>
+              <div className="grid grid-cols-5 gap-1.5">
+                {[0.5, 1, 1.5, 2, 4].map((scale) => (
+                  <button
+                    key={scale}
+                    onClick={() => setMultiplier(scale)}
+                    className={`py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      multiplier === scale
+                        ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+                        : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300'
+                    }`}
+                  >
+                    {scale}×
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Ingredient Checklist */}
+            <div className="space-y-2">
+              {recipe.ingredients.map((item, idx) => {
+                const scaledQty = item.quantity ? Math.round(item.quantity * multiplier * 100) / 100 : null
+                const isChecked = Boolean(checkedIngredients[idx])
+
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => toggleIngredient(idx)}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start space-x-3 ${
+                      isChecked
+                        ? 'bg-slate-950/40 border-slate-800/50 opacity-50'
+                        : 'bg-slate-950/70 border-slate-800/80 hover:border-slate-700'
+                    }`}
+                  >
+                    <div
+                      className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center transition-colors flex-shrink-0 ${
+                        isChecked
+                          ? 'bg-emerald-500 border-emerald-500 text-white'
+                          : 'border-slate-600 bg-slate-900'
+                      }`}
+                    >
+                      {isChecked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                    </div>
+
+                    <div className="flex-1 text-sm">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className={`font-semibold ${isChecked ? 'line-through text-slate-400' : 'text-slate-100'}`}>
+                          {item.name}
+                        </span>
+                        {scaledQty !== null && (
+                          <span className="text-xs font-bold text-orange-400 whitespace-nowrap bg-orange-950/40 border border-orange-900/50 px-2 py-0.5 rounded-lg">
+                            {scaledQty} {item.unit || ''}
+                          </span>
+                        )}
+                      </div>
+                      {item.notes && (
+                        <p className="text-xs text-slate-400 mt-0.5">{item.notes}</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Steps Column */}
+        <div className="lg:col-span-7 space-y-6">
+          <div className="bg-slate-900/90 rounded-3xl border border-slate-800 p-6 shadow-lg">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center space-x-2">
+                <ChefHat className="w-5 h-5 text-orange-400" />
+                <h2 className="text-lg font-bold text-slate-100">Cooking Method</h2>
+              </div>
+              <span className="text-xs text-slate-400">{recipe.steps.length} steps</span>
+            </div>
+
+            <div className="space-y-4">
+              {recipe.steps.map((step) => {
+                const isCompleted = Boolean(completedSteps[step.step_number])
+                const isSelected = activeStep === step.step_number
+
+                return (
+                  <div
+                    key={step.step_number}
+                    onClick={() => setActiveStep(step.step_number)}
+                    className={`p-5 rounded-2xl border transition-all cursor-pointer relative ${
+                      isCompleted
+                        ? 'bg-slate-950/40 border-slate-800/50 opacity-60'
+                        : isSelected
+                        ? 'bg-slate-950 border-orange-500/60 ring-1 ring-orange-500/40 shadow-lg'
+                        : 'bg-slate-950/70 border-slate-800/80 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-start space-x-3.5">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleStep(step.step_number)
+                        }}
+                        className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs flex-shrink-0 transition-colors cursor-pointer ${
+                          isCompleted
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-orange-500/10 text-orange-400 border border-orange-500/30 hover:bg-orange-500 hover:text-white'
+                        }`}
+                      >
+                        {isCompleted ? <CheckCircle2 className="w-4 h-4" /> : step.step_number}
+                      </button>
+
+                      <div className="flex-1">
+                        <p className={`text-sm sm:text-base leading-relaxed ${isCompleted ? 'line-through text-slate-400' : 'text-slate-100'}`}>
+                          {step.instruction}
+                        </p>
+
+                        {step.time_minutes && (
+                          <div className="mt-2.5 inline-flex items-center space-x-1.5 text-xs font-semibold text-orange-400 bg-orange-950/40 border border-orange-900/50 px-2.5 py-1 rounded-lg">
+                            <Clock className="w-3.5 h-3.5" />
+                            <span>{step.time_minutes} minutes</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
