@@ -89,6 +89,8 @@ node_modules/
 
 # Package lock files (if managed dynamically)
 uv.lock
+package-lock.json
+yarn.lock
 
 # Agent plans, execution logs, and scratchpads
 docs/superpowers/
