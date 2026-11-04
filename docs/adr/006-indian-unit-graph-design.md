@@ -57,7 +57,6 @@ UNIT_CONVERSIONS: dict[tuple[Unit, Unit], float] = {
     (Unit.GRAM, Unit.PAAV): 1.0 / 250.0,
     (Unit.PAAV, Unit.KILOGRAM): 0.25,
     (Unit.KILOGRAM, Unit.PAAV): 4.0,
-
     # Volume
     (Unit.MILLILITER, Unit.LITER): 0.001,
     (Unit.LITER, Unit.MILLILITER): 1000.0,
@@ -69,13 +68,11 @@ UNIT_CONVERSIONS: dict[tuple[Unit, Unit], float] = {
     (Unit.MILLILITER, Unit.CHAMCHA): 1.0 / 5.0,
     (Unit.KATORI, Unit.MILLILITER): 150.0,
     (Unit.MILLILITER, Unit.KATORI): 1.0 / 150.0,
-
     # Cross-volume
     (Unit.TABLESPOON, Unit.TEASPOON): 3.0,
     (Unit.TEASPOON, Unit.TABLESPOON): 1.0 / 3.0,
     (Unit.CHAMCHA, Unit.TEASPOON): 1.0,  # chamcha ≈ tsp
     (Unit.KATORI, Unit.TABLESPOON): 10.0,  # 150ml / 15ml
-
     # Mass-Volume water equivalence (approximate)
     (Unit.GRAM, Unit.MILLILITER): 1.0,
     (Unit.MILLILITER, Unit.GRAM): 1.0,
