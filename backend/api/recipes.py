@@ -33,6 +33,7 @@ from ..models.recipe import (
     RecipeUrlInput,
     Region,
 )
+from ..services.cooking_deduction import CookingDeductionService, DeductionReport
 from ..services.recipe_ingest import IngestResult, RecipeIngestService, confirmed_ids
 
 router = APIRouter(prefix="/api/v1/recipes", tags=["recipes"])
@@ -387,6 +388,38 @@ async def get_recipe(recipe_id: str, db: Database) -> Recipe:
     if doc is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return recipe_response(doc)
+
+
+@router.post("/{recipe_id}/cook", response_model=DeductionReport)
+async def cook_recipe(
+    recipe_id: str,
+    db: Database,
+    servings_multiplier: float = Query(1.0, ge=0.1, le=10.0),
+) -> DeductionReport:
+    """Deduct recipe ingredients from pantry stock using FEFO rules.
+
+    Args:
+        recipe_id: Target recipe identifier.
+        db: Injected database handle.
+        servings_multiplier: Scale multiplier for ingredient quantities.
+
+    Returns:
+        DeductionReport detailing deducted items and shortages.
+
+    Raises:
+        HTTPException: If recipe is not found.
+    """
+    # Verify target recipe exists before attempting pantry deduction.
+    doc = await db[COLLECTION_RECIPES].find_one({"_id": object_id(recipe_id)})
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    recipe_obj = recipe_response(doc)
+    service = CookingDeductionService(db)
+    return await service.deduct_recipe_ingredients(
+        recipe_obj,
+        servings_multiplier=servings_multiplier,
+    )
 
 
 @router.patch("/{recipe_id}", response_model=Recipe)
