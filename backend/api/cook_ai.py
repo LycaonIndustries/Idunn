@@ -1,6 +1,6 @@
 """Cook AI API endpoints for Iðunn Kitchen OS.
 
-Exposes algorithmic pantry recipe matching, vault queries, and culinary substitutions.
+Exposes pantry recipe matching, substitutions, and generative pantry-to-plate chef.
 """
 
 from __future__ import annotations
@@ -8,16 +8,20 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from backend.config import settings
 from backend.db import get_db
 from backend.models.cook_ai import (
     PantryMatchResult,
+    PantryToPlateRecipe,
+    PantryToPlateRequest,
     SubstitutionQueryRequest,
     SubstitutionSuggestion,
 )
 from backend.models.inventory import Item
 from backend.models.recipe import Recipe
+from backend.services.pantry_to_plate import PantryToPlateService
 from backend.services.recipe_matching import RecipeMatchingService
 from backend.services.substitution_engine import SubstitutionEngine
 
@@ -96,3 +100,45 @@ async def get_substitutions(
 
     # Execute deterministic substitution match against pantry stock.
     return SubstitutionEngine.find_pantry_substitutions(request.ingredient, inventory)
+
+
+@router.post(
+    "/pantry-to-plate",
+    response_model=PantryToPlateRecipe,
+    summary="Generate custom recipe on-the-fly from active pantry inventory",
+)
+async def generate_pantry_recipe(
+    request: PantryToPlateRequest,
+    db=Depends(get_db),
+) -> PantryToPlateRecipe:
+    """Explicit user-triggered action to synthesize an inventive recipe from current pantry.
+
+    Args:
+        request: PantryToPlateRequest parameters.
+        db: Database session dependency.
+
+    Returns:
+        PantryToPlateRecipe containing customized recipe.
+    """
+    logger.info("Generating pantry-to-plate recipe for %s servings", request.servings)
+
+    # Fetch active unconsumed inventory items.
+    query: dict[str, object] = {"consumed": False}
+    if request.selected_item_ids:
+        query["_id"] = {"$in": request.selected_item_ids}
+
+    raw_inventory = await db.inventory.find(query).to_list(length=1000)
+    inventory: list[Item] = []
+    for doc in raw_inventory:
+        doc["_id"] = str(doc.get("_id", ""))
+        inventory.append(Item.model_validate(doc))
+
+    # Guard against synthesizing with zero pantry ingredients.
+    if not inventory:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No ingredients available in pantry to generate a recipe.",
+        )
+
+    service = PantryToPlateService(settings)
+    return await service.generate_recipe(request, inventory)

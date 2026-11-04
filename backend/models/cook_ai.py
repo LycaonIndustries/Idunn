@@ -1,9 +1,11 @@
 """Pantry match data models for Iðunn Kitchen OS.
 
-Encapsulates recipe inventory coverage evaluations, FEFO scores, and substitution suggestions.
+Coverage evaluations, substitutions, and generative pantry-to-plate recipes.
 """
 
 from __future__ import annotations
+
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -58,3 +60,38 @@ class SubstitutionQueryRequest(BaseModel):
     """Request payload to query culinary substitutions for an ingredient."""
 
     ingredient: str = Field(min_length=1, description="Ingredient name to find substitutes for.")
+
+
+class PantryToPlateRequest(BaseModel):
+    """User-triggered request to synthesize an on-the-fly recipe from current pantry items."""
+
+    selected_item_ids: list[str] = Field(
+        default_factory=list,
+        description="Optional list of specific inventory item IDs to prioritize.",
+    )
+    meal_type: str = Field(default="dinner", description="Meal category (e.g. dinner, quick meal).")
+    servings: int = Field(default=2, ge=1, le=12, description="Target number of portions.")
+    dietary_preference: str | None = Field(default=None, description="e.g. veg, non_veg.")
+
+
+class PantryToPlateRecipe(BaseModel):
+    """AI-synthesized custom recipe tailored strictly to available pantry ingredients."""
+
+    title: str = Field(description="Generated recipe name.")
+    description: str = Field(default="", description="Summary of flavors and dish concept.")
+    prep_time_minutes: int = Field(default=10, description="Preparation duration.")
+    cook_time_minutes: int = Field(default=20, description="Active cooking duration.")
+    servings: int = Field(default=2, description="Number of servings.")
+    cuisine_type: str = Field(default="veg", description="Cuisine or dietary style.")
+    ingredients: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of ingredients used from pantry inventory.",
+    )
+    steps: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Ordered cooking steps.",
+    )
+    assumed_staples: list[str] = Field(
+        default_factory=lambda: ["salt", "water", "cooking oil", "black pepper"],
+        description="Assumed basic household pantry staples used.",
+    )
