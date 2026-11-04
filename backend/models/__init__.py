@@ -1,6 +1,12 @@
 """Pydantic models for Iðunn."""
 
-from .cook_ai import PantryMatchResult, SubstitutionQueryRequest, SubstitutionSuggestion
+from .cook_ai import (
+    PantryMatchResult,
+    PantryToPlateRecipe,
+    PantryToPlateRequest,
+    SubstitutionQueryRequest,
+    SubstitutionSuggestion,
+)
 from .ingredient import Ingredient, IngredientCreate, IngredientUpdate
 from .inventory import Item, ItemCreate, ItemUpdate, Location, Unit, UnitConversion
 from .receipt import (
@@ -39,6 +45,8 @@ __all__ = [
     "PantryMatchResult",
     "SubstitutionSuggestion",
     "SubstitutionQueryRequest",
+    "PantryToPlateRequest",
+    "PantryToPlateRecipe",
     "ShoppingListItem",
     "ShoppingListItemCreate",
     "ShoppingListItemUpdate",
