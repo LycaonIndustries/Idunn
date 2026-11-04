@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from pydantic import BaseModel
@@ -11,13 +11,14 @@ from ..config import settings
 
 
 class MongoClient:
-    """Singleton MongoDB client wrapper."""
+    """Singleton MongoDB client wrapper with automatic in-memory dev fallback."""
 
-    _client: AsyncIOMotorClient | None = None
-    _db: AsyncIOMotorDatabase | None = None
+    _client: Any = None
+    _db: Any = None
+    _is_mock: bool = False
 
     @classmethod
-    def get_client(cls) -> AsyncIOMotorClient:
+    def get_client(cls) -> Any:
         """Get or create MongoDB client."""
         if cls._client is None:
             cls._client = AsyncIOMotorClient(
@@ -27,23 +28,43 @@ class MongoClient:
         return cls._client
 
     @classmethod
-    def get_db(cls) -> AsyncIOMotorDatabase:
+    def get_db(cls) -> Any:
         """Get or create database reference."""
         if cls._db is None:
             cls._db = cls.get_client()[settings.mongodb_db_name]
         return cls._db
 
     @classmethod
+    def enable_in_memory_fallback(cls) -> None:
+        """Enable in-memory mock client when live MongoDB is unreachable."""
+        try:
+            from mongomock_motor import AsyncMongoMockClient
+
+            cls._client = AsyncMongoMockClient()
+            cls._db = cls._client[settings.mongodb_db_name]
+            cls._is_mock = True
+        except ImportError:
+            pass
+
+    @classmethod
+    def is_mock(cls) -> bool:
+        """True if running in in-memory fallback mode."""
+        return cls._is_mock
+
+    @classmethod
     async def close(cls) -> None:
         """Close MongoDB connection."""
-        if cls._client is not None:
+        if cls._client is not None and not cls._is_mock:
             cls._client.close()
-            cls._client = None
-            cls._db = None
+        cls._client = None
+        cls._db = None
+        cls._is_mock = False
 
     @classmethod
     async def ping(cls) -> bool:
         """Check MongoDB connectivity."""
+        if cls._is_mock:
+            return True
         try:
             await cls.get_client().admin.command("ping")
             return True

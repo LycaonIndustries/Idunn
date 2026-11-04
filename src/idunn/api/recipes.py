@@ -20,6 +20,7 @@ from ..models.recipe import (
     RecipeCreate,
     RecipeReview,
     RecipeTextInput,
+    RecipeUrlInput,
     RecipeUpdate,
     Region,
 )
@@ -108,10 +109,18 @@ async def review_queue(
 
 @router.post("/ingest", response_model=IngestResult, status_code=201)
 async def ingest_recipe(
-    service: IngestService, url: str = Query(..., min_length=1, max_length=500)
+    service: IngestService,
+    url: str | None = Query(None, min_length=1, max_length=500),
+    body: RecipeUrlInput | None = None,
 ):
     """Import one URL. Success means it has been stored, not merely queued."""
-    return await service.ingest_from_url(url)
+    target_url = url or (body.url if body else None)
+    if not target_url:
+        raise HTTPException(
+            status_code=422,
+            detail="A 'url' parameter (query string or JSON body) is required.",
+        )
+    return await service.ingest_from_url(target_url)
 
 
 @router.post("/ingest/text", response_model=IngestResult, status_code=201)

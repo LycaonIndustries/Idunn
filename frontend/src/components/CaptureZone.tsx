@@ -93,7 +93,7 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
     setSaving(true)
     setError(null)
     try {
-      const saved = await createRecipe(preview)
+      const saved = (preview.id || preview._id) ? preview : await createRecipe(preview)
       setSuccessMsg(`"${saved.title}" saved to your vault!`)
       setPreview(null)
       setSelectedFile(null)

@@ -138,6 +138,10 @@ class RecipeTextInput(BaseModel):
     source_name: str = Field("Pasted recipe", min_length=1, max_length=100)
 
 
+class RecipeUrlInput(BaseModel):
+    url: str = Field(min_length=1, max_length=500)
+
+
 class MatchDecision(BaseModel):
     ingredient_index: int = Field(ge=0)
     ingredient_id: str | None = None

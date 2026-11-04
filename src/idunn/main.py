@@ -37,10 +37,16 @@ async def lifespan(app: FastAPI):
     # Startup
     print(f"Starting {settings.app_name} v{settings.app_version}")
     is_connected = await MongoClient.ping()
-    print(f"MongoDB connected: {is_connected}")
-    try:
-        if is_connected:
+    if is_connected:
+        print("MongoDB connected: True (Live MongoDB)")
+        try:
             await setup_database_validation(MongoClient.get_db())
+        except Exception as exc:
+            print(f"Warning during MongoDB schema setup: {exc}")
+    else:
+        print("MongoDB offline on localhost:27017 -> using in-memory mock storage (Dev Mode)")
+        MongoClient.enable_in_memory_fallback()
+    try:
         yield
     finally:
         await MongoClient.close()
@@ -92,11 +98,12 @@ async def database_error_handler(request: Request, exc: PyMongoError):
 async def health_check():
     """Health check endpoint."""
     mongo_ok = await MongoClient.ping()
+    is_mock = MongoClient.is_mock()
     return {
-        "status": "healthy" if mongo_ok else "degraded",
+        "status": "healthy" if (mongo_ok or is_mock) else "degraded",
         "app": settings.app_name,
         "version": settings.app_version,
-        "mongodb": "connected" if mongo_ok else "disconnected",
+        "mongodb": "connected" if (mongo_ok and not is_mock) else ("in-memory-dev" if is_mock else "disconnected"),
     }
 
 
