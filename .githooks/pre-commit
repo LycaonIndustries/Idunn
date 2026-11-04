@@ -4,6 +4,17 @@
 
 set -e
 
+# Block direct commits to main or master branch
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "master" ]; then
+    echo "============================================================"
+    echo "❌ ERROR: Direct commits to '$BRANCH' are strictly banned!"
+    echo "   All changes must be made on a feature branch."
+    echo "   Run: git checkout -b feat/<name>"
+    echo "============================================================"
+    exit 1
+fi
+
 echo "[pre-commit] Checking backend with Ruff..."
 uv run ruff check backend
 uv run ruff format --check backend
