@@ -1,5 +1,6 @@
 """Pydantic models for Iðunn."""
 
+from .cook_ai import PantryMatchResult
 from .ingredient import Ingredient, IngredientCreate, IngredientUpdate
 from .inventory import Item, ItemCreate, ItemUpdate, Location, Unit, UnitConversion
 from .receipt import (
@@ -28,6 +29,7 @@ __all__ = [
     "Region",
     "CuisineType",
     "Difficulty",
+    "PantryMatchResult",
     "Receipt",
     "ReceiptConfirmRequest",
     "ReceiptItemCandidate",
