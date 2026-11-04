@@ -64,6 +64,10 @@ export interface InventoryCreate {
 }
 
 export interface SettingsStatus {
+  database_backend: string
+  supabase_configured: boolean
+  supabase_url?: string | null
+  supabase_key_masked?: string | null
   gemini_configured: boolean
   gemini_api_key_masked?: string | null
   gemini_model: string
@@ -79,6 +83,8 @@ export interface SettingsStatus {
 }
 
 export interface UpdateSettingsPayload {
+  supabase_url?: string
+  supabase_key?: string
   gemini_api_key?: string
   gemini_model?: string
   anthropic_api_key?: string

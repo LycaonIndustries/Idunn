@@ -26,7 +26,12 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
 
-    # MongoDB
+    # Database
+    database_backend: str = "supabase"  # "supabase" or "mongodb"
+    supabase_url: str | None = None
+    supabase_key: str | None = None
+
+    # MongoDB (legacy / optional)
     mongodb_url: str = "mongodb://localhost:27017"
     mongodb_db_name: str = "idunn"
 

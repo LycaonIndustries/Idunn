@@ -10,8 +10,22 @@ from pydantic import BaseModel
 from ..config import settings
 
 
+class DatabaseRouter:
+    """Routes collection lookups to Supabase or MongoDB based on configuration."""
+
+    def __getitem__(self, name: str) -> Any:
+        if settings.database_backend == "supabase":
+            from .supabase_client import SupabaseClientManager
+
+            return SupabaseClientManager.get_collection(name)
+        return MongoClient.get_db()[name]
+
+
+_db_router = DatabaseRouter()
+
+
 class MongoClient:
-    """Singleton MongoDB client wrapper with automatic in-memory dev fallback."""
+    """Singleton Database client wrapper with Supabase & MongoDB support."""
 
     _client: Any = None
     _db: Any = None
@@ -19,7 +33,7 @@ class MongoClient:
 
     @classmethod
     def get_client(cls) -> Any:
-        """Get or create MongoDB client."""
+        """Get or create client."""
         if cls._client is None:
             cls._client = AsyncIOMotorClient(
                 settings.mongodb_url,
@@ -30,13 +44,15 @@ class MongoClient:
     @classmethod
     def get_db(cls) -> Any:
         """Get or create database reference."""
+        if settings.database_backend == "supabase":
+            return _db_router
         if cls._db is None:
             cls._db = cls.get_client()[settings.mongodb_db_name]
         return cls._db
 
     @classmethod
     def enable_in_memory_fallback(cls) -> None:
-        """Enable in-memory mock client when live MongoDB is unreachable."""
+        """Enable in-memory mock client when live database is unreachable."""
         try:
             from mongomock_motor import AsyncMongoMockClient
 
@@ -49,11 +65,15 @@ class MongoClient:
     @classmethod
     def is_mock(cls) -> bool:
         """True if running in in-memory fallback mode."""
+        if settings.database_backend == "supabase":
+            from .supabase_client import SupabaseClientManager
+
+            return not SupabaseClientManager.is_configured()
         return cls._is_mock
 
     @classmethod
     async def close(cls) -> None:
-        """Close MongoDB connection."""
+        """Close connection."""
         if cls._client is not None and not cls._is_mock:
             cls._client.close()
         cls._client = None
@@ -62,7 +82,11 @@ class MongoClient:
 
     @classmethod
     async def ping(cls) -> bool:
-        """Check MongoDB connectivity."""
+        """Check database connectivity."""
+        if settings.database_backend == "supabase":
+            from .supabase_client import SupabaseClientManager
+
+            return await SupabaseClientManager.ping()
         if cls._is_mock:
             return True
         try:
@@ -72,9 +96,12 @@ class MongoClient:
             return False
 
 
-def get_db() -> AsyncGenerator[AsyncIOMotorDatabase, None]:
+def get_db() -> AsyncGenerator[Any, None]:
     """FastAPI dependency for database access."""
-    yield MongoClient.get_db()
+    if settings.database_backend == "supabase":
+        yield _db_router
+    else:
+        yield MongoClient.get_db()
 
 
 # Collection names

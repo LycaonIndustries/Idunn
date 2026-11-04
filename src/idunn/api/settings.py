@@ -20,6 +20,10 @@ ENV_EXAMPLE_PATH = Path(".env.example")
 class SettingsStatusResponse(BaseModel):
     """Public settings status with sensitive keys masked."""
 
+    database_backend: str
+    supabase_configured: bool
+    supabase_url: str | None = None
+    supabase_key_masked: str | None = None
     gemini_configured: bool
     gemini_api_key_masked: str | None = None
     gemini_model: str
@@ -37,6 +41,8 @@ class SettingsStatusResponse(BaseModel):
 class UpdateSettingsRequest(BaseModel):
     """Payload for updating BYOK API keys and models."""
 
+    supabase_url: str | None = Field(default=None, description="Supabase Project URL")
+    supabase_key: str | None = Field(default=None, description="Supabase API Key (anon or service)")
     gemini_api_key: str | None = Field(default=None, description="Google Gemini API Key")
     gemini_model: str | None = Field(default=None, description="Gemini model identifier")
     anthropic_api_key: str | None = Field(default=None, description="Anthropic API Key")
@@ -95,8 +101,12 @@ def _write_env_file(updates: dict[str, str]) -> None:
 
 @router.get("", response_model=SettingsStatusResponse)
 async def get_settings_status() -> SettingsStatusResponse:
-    """Return status of all BYOK providers with masked keys."""
+    """Return status of database and all BYOK providers with masked keys."""
     return SettingsStatusResponse(
+        database_backend=settings.database_backend,
+        supabase_configured=bool(settings.supabase_url and settings.supabase_key),
+        supabase_url=settings.supabase_url,
+        supabase_key_masked=_mask_key(settings.supabase_key),
         gemini_configured=bool(settings.gemini_api_key),
         gemini_api_key_masked=_mask_key(settings.gemini_api_key),
         gemini_model=settings.gemini_model,
@@ -114,8 +124,23 @@ async def get_settings_status() -> SettingsStatusResponse:
 
 @router.post("", response_model=SettingsStatusResponse)
 async def update_settings(req: UpdateSettingsRequest) -> SettingsStatusResponse:
-    """Update BYOK settings at runtime and persist them to .env."""
+    """Update settings at runtime and persist them to .env."""
     env_updates: dict[str, str] = {}
+
+    if req.supabase_url is not None:
+        val = req.supabase_url.strip()
+        settings.supabase_url = val or None
+        os.environ["SUPABASE_URL"] = val
+        env_updates["SUPABASE_URL"] = val
+
+    if req.supabase_key is not None:
+        val = req.supabase_key.strip()
+        settings.supabase_key = val or None
+        os.environ["SUPABASE_KEY"] = val
+        env_updates["SUPABASE_KEY"] = val
+        from ..db.supabase_client import SupabaseClientManager
+
+        SupabaseClientManager.reset()
 
     if req.gemini_api_key is not None:
         val = req.gemini_api_key.strip()
