@@ -81,7 +81,7 @@ idunn/
 │   ├── API_REFERENCE.md      # REST endpoints and request/response payloads
 │   ├── DATABASE_AND_STORAGE.md # Supabase PostgreSQL & MongoDB schemas
 │   └── INGESTION_PIPELINE.md # Multi-source extraction architecture
-├── supabase/                 # Supabase schema definitions (schema.sql)
+├── db/                       # Supabase schema definitions (schema.sql)
 ├── tests/                    # Automated pytest test suite (131 tests)
 ├── Dockerfile                # Multi-stage production container
 ├── docker-compose.yml        # Orchestration configuration
