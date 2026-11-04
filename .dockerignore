@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Frontend build artifacts (rebuilt in Docker)
+src/idunn/web_dist/
+frontend/node_modules/
+
+# Git
+.git/
+.gitignore
+
+# Environment (secrets — pass via docker-compose or --env-file)
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs (not needed in image)
+docs/
+*.md
+!README.md

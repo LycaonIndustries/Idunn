@@ -1,18 +1,21 @@
 """Iðunn - Kitchen Inventory & Meal Planning.
 
 Main FastAPI application entry point.
+Serves both the API and the built React frontend from a single process.
 """
 
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pymongo.errors import PyMongoError
 
-from .api import ingredients, inventory, recipes
+from .api import ingredients, inventory, recipes, settings as settings_api
 from .config import settings
 from .db import MongoClient
 from .db.schemas import setup_database_validation
@@ -24,6 +27,9 @@ from .services.ingest_errors import (
     SourceError,
 )
 
+# Frontend build output — produced by `npm run build` inside frontend/
+WEB_DIST = Path(__file__).resolve().parent / "web_dist"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,10 +37,16 @@ async def lifespan(app: FastAPI):
     # Startup
     print(f"Starting {settings.app_name} v{settings.app_version}")
     is_connected = await MongoClient.ping()
-    print(f"MongoDB connected: {is_connected}")
-    try:
-        if is_connected:
+    if is_connected:
+        print("MongoDB connected: True (Live MongoDB)")
+        try:
             await setup_database_validation(MongoClient.get_db())
+        except Exception as exc:
+            print(f"Warning during MongoDB schema setup: {exc}")
+    else:
+        print("MongoDB offline on localhost:27017 -> using in-memory mock storage (Dev Mode)")
+        MongoClient.enable_in_memory_fallback()
+    try:
         yield
     finally:
         await MongoClient.close()
@@ -63,6 +75,7 @@ app.add_middleware(
 app.include_router(inventory.router)
 app.include_router(ingredients.router)
 app.include_router(recipes.router)
+app.include_router(settings_api.router)
 
 
 @app.exception_handler(IngestError)
@@ -85,21 +98,53 @@ async def database_error_handler(request: Request, exc: PyMongoError):
 async def health_check():
     """Health check endpoint."""
     mongo_ok = await MongoClient.ping()
+    is_mock = MongoClient.is_mock()
     return {
-        "status": "healthy" if mongo_ok else "degraded",
+        "status": "healthy" if (mongo_ok or is_mock) else "degraded",
         "app": settings.app_name,
         "version": settings.app_version,
-        "mongodb": "connected" if mongo_ok else "disconnected",
+        "mongodb": "connected" if (mongo_ok and not is_mock) else ("in-memory-dev" if is_mock else "disconnected"),
     }
 
 
-@app.get("/", tags=["root"])
-async def root():
-    """Root endpoint with API info."""
-    return {
-        "app": settings.app_name,
-        "version": settings.app_version,
-        "docs": "/docs",
-        "openapi": "/openapi.json",
-        "phase": "Phase 2 - Recipe Ingest",
-    }
+# ---------------------------------------------------------------------------
+# SPA static mount — only when frontend/build exists
+# ---------------------------------------------------------------------------
+# Mount /assets for hashed JS/CSS bundles, then catch-all for SPA routing.
+# API routes (/api/*, /docs, /health) are registered first and take priority.
+# ---------------------------------------------------------------------------
+
+if WEB_DIST.is_dir():
+    _assets = WEB_DIST / "assets"
+    if _assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(_assets)), name="frontend-assets")
+
+    # Serve favicon and other root-level static files
+    @app.get("/favicon.svg", include_in_schema=False)
+    async def favicon():
+        path = WEB_DIST / "favicon.svg"
+        if path.is_file():
+            return FileResponse(str(path), media_type="image/svg+xml")
+        return JSONResponse(status_code=404, content={"detail": "Not found"})
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def spa_catch_all(full_path: str):
+        """Serve index.html for all non-API routes (SPA client-side routing)."""
+        # First check if the path matches a real static file in web_dist
+        file_path = WEB_DIST / full_path
+        if full_path and file_path.is_file():
+            return FileResponse(str(file_path))
+        # Otherwise return index.html for client-side routing
+        return FileResponse(str(WEB_DIST / "index.html"))
+else:
+    @app.get("/", tags=["root"])
+    async def root():
+        """Root endpoint with API info (no frontend build present)."""
+        return {
+            "app": settings.app_name,
+            "version": settings.app_version,
+            "docs": "/docs",
+            "openapi": "/openapi.json",
+            "phase": "Phase 2 - Recipe Ingest",
+            "hint": "Run 'cd frontend && npm run build' to enable the web UI.",
+        }

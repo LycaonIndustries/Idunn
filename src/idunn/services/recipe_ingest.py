@@ -59,6 +59,10 @@ class RecipeIngestService:
             raise ProviderNotConfiguredError("Set GEMINI_API_KEY to extract recipes from images.")
         extractor = GeminiRecipeExtractor(self.config)
         extracted = await extractor.extract_image(image_bytes, mime_type)
+        if not extracted.recipe.image_url:
+            import base64
+            b64 = base64.b64encode(image_bytes).decode("ascii")
+            extracted.recipe.image_url = f"data:{mime_type};base64,{b64}"
         return await self.store(extracted, source_name)
 
     async def ingest_from_audio(
@@ -123,6 +127,10 @@ class RecipeIngestService:
         keyframes = await sample_video_keyframes(video_bytes, max_frames=15)
         extractor = GeminiRecipeExtractor(self.config)
         extracted = await extractor.extract_video_frames(keyframes)
+        if not extracted.recipe.image_url and keyframes:
+            import base64
+            b64 = base64.b64encode(keyframes[0]).decode("ascii")
+            extracted.recipe.image_url = f"data:image/jpeg;base64,{b64}"
         return await self.store(extracted, source_name)
 
     async def store(self, extracted: ExtractedRecipe, source: str) -> IngestResult:

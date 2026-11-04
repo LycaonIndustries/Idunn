@@ -110,7 +110,7 @@ class RecipeBase(BaseModel):
     source_name: str | None = Field(
         None, max_length=100, description="Source name (e.g., 'Hebbar's Kitchen')"
     )
-    image_url: str | None = Field(None, max_length=500, description="Recipe image URL")
+    image_url: str | None = Field(None, max_length=5_000_000, description="Recipe image URL or data URI")
     video_url: str | None = Field(None, max_length=500, description="Video URL (YouTube)")
     tags: list[str] = Field(default_factory=list, description="Tags (e.g., 'lunch', 'dinner')")
     nutrition: NutritionInfo | None = Field(None, description="Nutrition per serving")
@@ -136,6 +136,10 @@ class IngredientMatch(BaseModel):
 class RecipeTextInput(BaseModel):
     text: str = Field(min_length=1, max_length=60_000)
     source_name: str = Field("Pasted recipe", min_length=1, max_length=100)
+
+
+class RecipeUrlInput(BaseModel):
+    url: str = Field(min_length=1, max_length=500)
 
 
 class MatchDecision(BaseModel):

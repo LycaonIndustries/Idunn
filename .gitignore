@@ -73,3 +73,9 @@ minio-data/
 
 # Jupyter
 .ipynb_checkpoints
+
+# Frontend build output (regenerated from frontend/)
+src/idunn/web_dist/
+
+# Node
+node_modules/
