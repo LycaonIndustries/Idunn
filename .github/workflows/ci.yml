@@ -8,11 +8,13 @@ on:
 
 jobs:
   backend-checks:
-    name: Backend Lint & Tests (Python 3.13)
+    name: Backend Lint, Tests & Review Lock (Python 3.13)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up uv
         uses: astral-sh/setup-uv@v5
@@ -33,6 +35,9 @@ jobs:
 
       - name: Run Pytest test suite
         run: uv run python -m pytest
+
+      - name: Verify Review Lock & PR Granularity
+        run: uv run python scripts/dev_review.py --mode=audit --strict
 
   frontend-checks:
     name: Frontend Lint & Tests (Bun & React 19)
@@ -56,3 +61,24 @@ jobs:
 
       - name: Build frontend production bundle
         run: bun run --cwd frontend build
+
+  security-audit:
+    name: Dependency Vulnerability Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Run Python Dependency Audit (pip-audit)
+        run: uvx pip-audit
+
+      - name: Run Frontend Dependency Audit (bun audit)
+        run: bun audit --cwd frontend

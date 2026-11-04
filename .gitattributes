@@ -1,0 +1,26 @@
+# Auto-detect text files and normalize line endings to LF on commit
+* text=auto eol=lf
+
+# Explicitly force LF on all source code, configs, and scripts
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.sh text eol=lf
+Justfile text eol=lf
+Dockerfile text eol=lf
+.gitignore text eol=lf
+.env.example text eol=lf
+.review.lock text eol=lf
+
+# Binary media assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.svg text eol=lf
