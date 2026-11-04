@@ -301,3 +301,36 @@ export interface DeductionReport {
   fully_satisfied: boolean
 }
 
+
+
+// Shopping list item with quick-commerce deep links.
+export interface ShoppingListItem {
+  _id: string
+  name: string
+  quantity: number
+  unit: string
+  checked: boolean
+  source_recipe_id?: string | null
+  created_at: string
+  updated_at: string
+  quick_links: {
+    blinkit?: string
+    zepto?: string
+    instamart?: string
+    [key: string]: string | undefined
+  }
+}
+
+export interface ShoppingListItemCreate {
+  name: string
+  quantity?: number
+  unit?: string
+  source_recipe_id?: string | null
+}
+
+export interface ShoppingListItemUpdate {
+  name?: string
+  quantity?: number
+  unit?: string
+  checked?: boolean
+}
