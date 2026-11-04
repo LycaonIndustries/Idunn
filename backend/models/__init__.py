@@ -12,6 +12,13 @@ from .receipt import (
     estimate_storage_location,
 )
 from .recipe import CuisineType, Difficulty, Recipe, RecipeCreate, RecipeUpdate, Region
+from .shopping import (
+    ShoppingListBatchCreate,
+    ShoppingListItem,
+    ShoppingListItemCreate,
+    ShoppingListItemUpdate,
+    generate_quick_commerce_links,
+)
 
 __all__ = [
     "Item",
@@ -32,6 +39,11 @@ __all__ = [
     "PantryMatchResult",
     "SubstitutionSuggestion",
     "SubstitutionQueryRequest",
+    "ShoppingListItem",
+    "ShoppingListItemCreate",
+    "ShoppingListItemUpdate",
+    "ShoppingListBatchCreate",
+    "generate_quick_commerce_links",
     "Receipt",
     "ReceiptConfirmRequest",
     "ReceiptItemCandidate",
