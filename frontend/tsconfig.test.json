@@ -9,5 +9,5 @@
     "jsx": "react-jsx",
     "noEmit": true
   },
-  "include": ["src/**/*.test.ts", "src/**/*.test.tsx", "test/**/*"]
+  "include": ["tests/**/*"]
 }

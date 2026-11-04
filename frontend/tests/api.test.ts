@@ -14,7 +14,7 @@ import {
   ingestText,
   ingestUrl,
   updateSettings,
-} from './api'
+} from '../src/api'
 
 describe('API Client', () => {
   const originalFetch = globalThis.fetch

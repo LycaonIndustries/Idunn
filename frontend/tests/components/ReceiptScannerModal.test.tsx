@@ -4,7 +4,7 @@
 import { describe, expect, it, mock } from 'bun:test'
 import React from 'react'
 import { render, fireEvent } from '@testing-library/react'
-import { ReceiptScannerModal } from './ReceiptScannerModal'
+import { ReceiptScannerModal } from '../../src/components/ReceiptScannerModal'
 
 describe('ReceiptScannerModal Component', () => {
   // Test modal invisibility when isOpen is false.

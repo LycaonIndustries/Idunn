@@ -4,7 +4,7 @@
 import { describe, expect, it, mock } from 'bun:test'
 import React from 'react'
 import { render, fireEvent } from '@testing-library/react'
-import { Navbar } from './Navbar'
+import { Navbar } from '../../src/components/Navbar'
 
 describe('Navbar Component', () => {
   // Verify branding and navigation items render properly for the user.

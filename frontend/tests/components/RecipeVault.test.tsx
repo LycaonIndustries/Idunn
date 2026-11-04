@@ -4,8 +4,8 @@
 import { describe, expect, it } from 'bun:test'
 import React from 'react'
 import { render, fireEvent } from '@testing-library/react'
-import { RecipeVault } from './RecipeVault'
-import type { Recipe } from '../types'
+import { RecipeVault } from '../../src/components/RecipeVault'
+import type { Recipe } from '../../src/types'
 
 describe('RecipeVault Component', () => {
   const recipes: Recipe[] = [

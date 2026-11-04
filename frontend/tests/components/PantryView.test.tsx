@@ -4,8 +4,8 @@
 import { describe, expect, it } from 'bun:test'
 import React from 'react'
 import { render, fireEvent } from '@testing-library/react'
-import { PantryView } from './PantryView'
-import type { InventoryItem } from '../types'
+import { PantryView } from '../../src/components/PantryView'
+import type { InventoryItem } from '../../src/types'
 
 describe('PantryView Component', () => {
   const sampleItems: InventoryItem[] = [

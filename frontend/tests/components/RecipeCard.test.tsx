@@ -4,8 +4,8 @@
 import { describe, expect, it, mock } from 'bun:test'
 import React from 'react'
 import { render, fireEvent } from '@testing-library/react'
-import { RecipeCard } from './RecipeCard'
-import type { Recipe } from '../types'
+import { RecipeCard } from '../../src/components/RecipeCard'
+import type { Recipe } from '../../src/types'
 
 describe('RecipeCard Component', () => {
   const sampleRecipe: Recipe = {
