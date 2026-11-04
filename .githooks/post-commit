@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Post-commit hook for Iðunn Kitchen OS
+# Automatically audits commit size and updates the uncommitted .review.lock
+
+uv run python scripts/dev_review.py --mode=audit

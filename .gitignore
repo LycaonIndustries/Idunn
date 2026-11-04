@@ -99,3 +99,6 @@ plans/
 *summary*.md
 *.scratch.*
 
+# Development review lockfile (local only, never committed)
+.review.lock
+

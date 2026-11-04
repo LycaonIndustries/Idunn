@@ -25,3 +25,12 @@
 - **Task Runner**: `just` (`Justfile`).
   - Run all tests: `just test`
   - Run all linters: `just lint`
+  - Run review audit: `just review`
+  - Verify review lock: `just review-verify`
+
+## 3. PR Granularity & Algorithmic-First Policy
+
+- **Max Diff Target**: Target ≤ 350 lines per PR (hard ceiling: 500 lines).
+- **Atomic Sub-Capabilities**: Split core algorithms, API endpoints, and frontend views into separate PRs.
+- **Algorithmic First**: Never use AI when graphs, taxonomies, or fuzzy regex can solve the problem.
+- **Uncommitted Review Lock**: Post-commit hook updates local `.review.lock`. Pre-push hook blocks oversized or unreviewed PRs.
