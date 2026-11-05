@@ -4,16 +4,16 @@
  */
 
 import React from 'react'
-import { Sparkles, BookOpen, Package, ChefHat, Settings, Utensils, ShoppingCart } from 'lucide-react'
+import { Sparkles, BookOpen, Package, ChefHat, Settings, Utensils, ShoppingCart, Calendar } from 'lucide-react'
 
 /**
  * Properties for the Navbar component.
  */
 interface NavbarProps {
   /** Active navigation tab key. */
-  activeTab: 'capture' | 'vault' | 'pantry' | 'cook-ai' | 'shopping' | 'settings'
+  activeTab: 'capture' | 'vault' | 'pantry' | 'cook-ai' | 'shopping' | 'planner' | 'settings'
   /** Tab switch event handler. */
-  setActiveTab: (tab: 'capture' | 'vault' | 'pantry' | 'cook-ai' | 'shopping' | 'settings') => void
+  setActiveTab: (tab: 'capture' | 'vault' | 'pantry' | 'cook-ai' | 'shopping' | 'planner' | 'settings') => void
   /** Total number of stored recipes for badge display. */
   recipeCount: number
   /** Total number of active pantry items for badge display. */
@@ -129,6 +129,19 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Utensils className="w-4 h-4" />
             <span>Cook AI</span>
+          </button>
+
+          {/* 7-Day Meal Planner */}
+          <button
+            onClick={() => setActiveTab('planner')}
+            className={`flex items-center space-x-2 px-2.5 sm:px-3 py-2 rounded-xl text-sm font-medium transition-all ${
+              activeTab === 'planner'
+                ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/30'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <Calendar className="w-4 h-4" />
+            <span className="hidden md:inline">Planner</span>
           </button>
 
           {/* Quick-Commerce Shopping List */}
