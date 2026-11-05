@@ -67,7 +67,7 @@ async def load_persisted_settings() -> None:
             )
 
     for env_key, val in loaded.items():
-        if val and not os.environ.get(env_key):
+        if val:
             os.environ[env_key] = val
             attr = KEY_MAP.get(env_key)
             if attr and hasattr(settings, attr):
