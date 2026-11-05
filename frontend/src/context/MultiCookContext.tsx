@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import type { Recipe } from '../types'
-import {
+import type {
   ActiveCookItem,
   ActiveCookTimer,
+} from './multiCookContextDef'
+import {
   MultiCookContext,
   STORAGE_KEY,
 } from './multiCookContextDef'
