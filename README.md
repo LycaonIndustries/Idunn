@@ -10,7 +10,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react&logoColor=black)](https://react.dev)
 [![Supabase](https://img.shields.io/badge/Database-Supabase-3ECF8E?style=flat&logo=supabase&logoColor=white)](https://supabase.com)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4_Dark_Mode-06B6D4?style=flat&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
-[![Tests](https://img.shields.io/badge/Tests-131_Passing-success?style=flat&logo=pytest&logoColor=white)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-214_Passing-success?style=flat&logo=pytest&logoColor=white)](tests/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker&logoColor=white)](Dockerfile)
 
 </div>
@@ -20,6 +20,11 @@
 ## Highlights
 
 - **Multimodal AI Recipe Ingestion**: Import recipes directly from YouTube videos, food blogs, cookbook photos, WhatsApp forwards, or silent video reels.
+- **Cook AI & "What Can I Cook?" Matching**: Real-time pantry-to-vault ranking scoring recipes by percentage of in-stock ingredients with missing item urgency badges.
+- **Deterministic Culinary Substitution Engine**: Knowledge-graph based substitutions for Indian regional cooking (e.g. hung curd for sour cream, besan for chickpea flour, tamarind for kokum).
+- **Multi-Platform Quick-Commerce Receipt Ingestion**: Scan receipts or delivery confirmations from Blinkit, Zepto, and Instamart with automatic line-item parsing and pantry replenishment.
+- **Smart Shopping List with Quick-Commerce Links**: Automatically aggregates missing ingredients across planned meals with direct deep-links to Indian delivery platforms.
+- **ICMR/NIN IFCT Indian Nutrition Intelligence**: Macro & micronutrient composition calculation using authoritative ICMR/NIN food composition tables.
 - **Dedicated Recipe Pages with Source Photos**: Automatically captures YouTube thumbnails, OpenGraph/Twitter card images, and screenshot photos, paired with interactive serving scalers (`0.5×` to `4×`).
 - **Nutritional Macro Intelligence**: Captures calories (kcal), protein, carbohydrates, fat, and fiber per serving.
 - **Pantry Tracking with Indian Regional Units**: FEFO (First-Expire-First-Out) pantry tracking supporting *katori*, *chamcha*, *paav*, grams, and kilograms.
@@ -82,7 +87,7 @@ idunn/
 │   ├── DATABASE_AND_STORAGE.md # Supabase PostgreSQL & MongoDB schemas
 │   └── INGESTION_PIPELINE.md # Multi-source extraction architecture
 ├── db/                       # Supabase schema definitions (schema.sql)
-├── tests/                    # Automated pytest test suite (131 tests)
+├── tests/                    # Automated test suite (214 tests: Pytest + Bun)
 ├── Dockerfile                # Multi-stage production container
 ├── docker-compose.yml        # Orchestration configuration
 ├── pyproject.toml            # Python packaging & tool configs
@@ -107,6 +112,24 @@ GEMINI_API_KEY=AIzaSy...
 
 ---
 
+## Developer Workflow (`Justfile`)
+
+Iðunn includes a [`Justfile`](Justfile) task runner for unified developer ergonomics across backend and frontend:
+
+| Command | Target | Description |
+|---|---|---|
+| `just dev` | Fullstack | Start development server with hot reload |
+| `just test` | Fullstack | Run complete pytest (Python) and bun test (React) suites |
+| `just lint` | Fullstack | Check backend with Ruff and frontend with Oxlint |
+| `just format` | Fullstack | Auto-format Python backend code |
+| `just check` | Fullstack | Pre-push quality gate running all linters and tests |
+| `just audit` | Security | Dependency vulnerability audit via `pip-audit` & `bun audit` |
+| `just review` | Review Lock | Audit uncommitted diff and update local `.review.lock` |
+| `just review-verify` | Review Lock | Verify review lock integrity and diff limits (≤ 500 lines) |
+| `just worker` | Background Tasks | Start ARQ Redis asynchronous background worker |
+
+---
+
 ## Documentation
 
 For technical specifications, refer to the documentation in [`docs/`](docs/):
@@ -120,4 +143,4 @@ For technical specifications, refer to the documentation in [`docs/`](docs/):
 
 ## License
 
-MIT © [Lycaon Industries](https://github.com/LycaonIndustries)
+LSAL-AI-1.0 © [Lycaon Industries](https://github.com/LycaonIndustries). See [LICENSE.md](LICENSE.md) for full terms.
