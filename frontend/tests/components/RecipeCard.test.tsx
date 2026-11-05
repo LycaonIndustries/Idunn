@@ -70,6 +70,33 @@ describe('RecipeCard Component', () => {
     expect(handleSelect).toHaveBeenCalledWith(sampleRecipe)
   })
 
+  // Verify keyboard navigation activates card with Enter or Space key.
+  it('invokes onSelect when Enter or Space is pressed on accessible card header', () => {
+    const handleSelect = mock(() => {})
+    const handleDelete = mock(() => {})
+
+    const { getByLabelText } = render(
+      <RecipeCard
+        recipe={sampleRecipe}
+        onSelect={handleSelect}
+        onDelete={handleDelete}
+      />
+    )
+
+    const header = getByLabelText(`View recipe details for ${sampleRecipe.title}`)
+    expect(header).toBeDefined()
+    expect(header.getAttribute('role')).toBe('button')
+    expect(header.getAttribute('tabIndex')).toBe('0')
+
+    // Press Enter to select
+    fireEvent.keyDown(header, { key: 'Enter' })
+    expect(handleSelect).toHaveBeenCalledWith(sampleRecipe)
+
+    // Press Space to select
+    fireEvent.keyDown(header, { key: ' ' })
+    expect(handleSelect).toHaveBeenCalledTimes(2)
+  })
+
   // Verify delete button requires user confirmation before invoking onDelete.
   it('invokes onDelete when delete button is confirmed', () => {
     const handleSelect = mock(() => {})

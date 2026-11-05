@@ -22,9 +22,13 @@ import {
   AlertTriangle,
   Loader2,
   X,
+  Sun,
 } from 'lucide-react'
 import type { DeductionReport, Recipe } from '../types'
 import { cookRecipe } from '../api'
+import { useScreenWakeLock } from '../hooks/useScreenWakeLock'
+import { extractStepDuration } from '../utils/duration'
+import { StepTimer } from './StepTimer'
 
 /**
  * Properties for RecipeDetailPage component.
@@ -64,10 +68,15 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
   // Visual confirmation timer for link clipboard copy.
   const [copied, setCopied] = useState(false)
 
+  // Track pending recipe deletion state to guard against double-submits.
+  const [deleting, setDeleting] = useState(false)
+
   // Track automatic pantry deduction request and result report.
   const [cooking, setCooking] = useState(false)
   const [deductionReport, setDeductionReport] = useState<DeductionReport | null>(null)
   const [cookError, setCookError] = useState<string | null>(null)
+  const [keepAwake, setKeepAwake] = useState(false)
+  const { isLocked, isSupported } = useScreenWakeLock(keepAwake)
 
   // Resolve recipe ID handling MongoDB (_id) and Supabase (id) naming conventions.
   const recipeId = recipe.id || recipe._id || ''
@@ -84,18 +93,36 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
     setCompletedSteps((prev) => ({ ...prev, [stepNum]: !prev[stepNum] }))
   }
 
-  // Copy current recipe browser URL to clipboard for family sharing.
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  // Copy current recipe browser URL to clipboard for family sharing with graceful fallback.
+  const handleShare = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Clipboard API unavailable')
+      }
+      await navigator.clipboard.writeText(window.location.href)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Fallback for non-secure contexts or denied permissions.
+      try {
+        window.prompt('Copy recipe link:', window.location.href)
+      } catch {
+        // Ignore if prompt is also unavailable.
+      }
+    }
   }
 
-  // Prompt confirmation dialog before permanent deletion from vault.
-  const handleDelete = () => {
+  // Prompt confirmation dialog before permanent deletion from vault with double-submit guard.
+  const handleDelete = async () => {
+    if (deleting) return
     if (window.confirm(`Are you sure you want to delete "${recipe.title}" from your vault?`)) {
-      onDelete(recipeId)
-      onBack()
+      try {
+        setDeleting(true)
+        await Promise.resolve(onDelete(recipeId))
+        onBack()
+      } catch {
+        setDeleting(false)
+      }
     }
   }
 
@@ -145,6 +172,23 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
           </button>
 
           <button
+            onClick={() => setKeepAwake((prev) => !prev)}
+            title={
+              isSupported
+                ? 'Keep screen awake during cooking'
+                : 'Screen Wake Lock API not supported on this browser'
+            }
+            className={`flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-colors cursor-pointer ${
+              keepAwake && isLocked
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 ring-1 ring-amber-500/40'
+                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+          >
+            <Sun className="w-3.5 h-3.5" />
+            <span>{keepAwake && isLocked ? 'Awake' : 'Keep Awake'}</span>
+          </button>
+
+          <button
             onClick={handleShare}
             className="flex items-center space-x-1.5 text-xs font-medium text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
           >
@@ -158,10 +202,15 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
 
           <button
             onClick={handleDelete}
-            title="Delete recipe"
-            className="text-slate-400 hover:text-red-400 bg-slate-900 border border-slate-800 p-2 rounded-xl transition-colors cursor-pointer"
+            disabled={deleting}
+            title={deleting ? 'Deleting recipe...' : 'Delete recipe'}
+            className="text-slate-400 hover:text-red-400 bg-slate-900 border border-slate-800 p-2 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
           >
-            <Trash2 className="w-4 h-4" />
+            {deleting ? (
+              <Loader2 className="w-4 h-4 animate-spin text-red-400" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
           </button>
         </div>
       </div>
@@ -432,8 +481,17 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
                 return (
                   <div
                     key={idx}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => toggleIngredient(idx)}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start space-x-3 ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleIngredient(idx)
+                      }
+                    }}
+                    aria-label={`Toggle ingredient ${item.name}`}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start space-x-3 focus:outline-none focus:ring-1 focus:ring-orange-500 ${
                       isChecked
                         ? 'bg-slate-950/40 border-slate-800/50 opacity-50'
                         : 'bg-slate-950/70 border-slate-800/80 hover:border-slate-700'
@@ -492,8 +550,17 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
                 return (
                   <div
                     key={step.step_number}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setActiveStep(step.step_number)}
-                    className={`p-5 rounded-2xl border transition-all cursor-pointer relative ${
+                    onKeyDown={(e) => {
+                      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault()
+                        setActiveStep(step.step_number)
+                      }
+                    }}
+                    aria-label={`Select step ${step.step_number}`}
+                    className={`p-5 rounded-2xl border transition-all cursor-pointer relative focus:outline-none focus:ring-1 focus:ring-orange-500 ${
                       isCompleted
                         ? 'bg-slate-950/40 border-slate-800/50 opacity-60'
                         : isSelected
@@ -526,12 +593,31 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
                           {step.instruction}
                         </p>
 
-                        {step.time_minutes && (
-                          <div className="mt-2.5 inline-flex items-center space-x-1.5 text-xs font-semibold text-orange-400 bg-orange-950/40 border border-orange-900/50 px-2.5 py-1 rounded-lg">
-                            <Clock className="w-3.5 h-3.5" />
-                            <span>{step.time_minutes} minutes</span>
-                          </div>
-                        )}
+                        {(() => {
+                          const durationSecs = extractStepDuration(
+                            step.instruction,
+                            step.time_minutes,
+                          )
+                          if (durationSecs && durationSecs > 0) {
+                            return (
+                              <div className="mt-2.5">
+                                <StepTimer
+                                  durationSeconds={durationSecs}
+                                  label={`Step ${step.step_number}`}
+                                />
+                              </div>
+                            )
+                          }
+                          if (step.time_minutes) {
+                            return (
+                              <div className="mt-2.5 inline-flex items-center space-x-1.5 text-xs font-semibold text-orange-400 bg-orange-950/40 border border-orange-900/50 px-2.5 py-1 rounded-lg">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span>{step.time_minutes} minutes</span>
+                              </div>
+                            )
+                          }
+                          return null
+                        })()}
                       </div>
                     </div>
                   </div>

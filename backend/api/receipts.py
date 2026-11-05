@@ -10,7 +10,6 @@ from fastapi import (
     Depends,
     File,
     Form,
-    HTTPException,
     UploadFile,
     status,
 )
@@ -20,6 +19,7 @@ from pydantic import BaseModel, Field
 from ..config import settings
 from ..db import COLLECTION_ITEMS, COLLECTION_RECEIPTS, get_db
 from ..models.receipt import Receipt, ReceiptConfirmRequest
+from ..security.upload_validation import read_and_validate_upload
 from ..services.receipt_ingest import ReceiptIngestService
 
 router = APIRouter(prefix="/api/v1/receipts", tags=["receipts"])
@@ -71,15 +71,9 @@ async def ingest_receipt_image(
     Raises:
         HTTPException: If file is missing or extraction fails.
     """
-    # Verify file content exists to prevent empty API calls.
-    image_bytes = await file.read()
-    if not image_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded file is empty.",
-        )
+    # Enforce size limits and magic byte verification to prevent DoS and malicious payloads.
+    image_bytes, mime_type = await read_and_validate_upload(file)
 
-    mime_type = file.content_type or "image/jpeg"
     receipt = await service.extract_from_image(
         image_bytes=image_bytes,
         mime_type=mime_type,
