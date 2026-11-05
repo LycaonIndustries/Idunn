@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_MAX_DIFF_LINES = 500
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-flash-lite-latest"
 
 
 def run_git(args: list[str], root: Path | None = None) -> str:
