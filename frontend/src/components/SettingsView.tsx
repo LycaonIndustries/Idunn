@@ -691,22 +691,21 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
           </div>
         </div>
 
-        {/* Security badge assures user keys are never transmitted to third-party telemetry. */}
-        <div className="flex items-start space-x-3 bg-slate-900/40 border border-slate-800 rounded-xl p-4 text-xs text-slate-400">
-          <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
-          <p className="leading-relaxed">
-            <strong className="text-slate-300">Privacy & Security:</strong> Your keys are stored
-            locally on your machine in <code className="text-orange-400 font-mono">.env</code> and
-            loaded directly into Iðunn&apos;s runtime memory.
-          </p>
-        </div>
+        {/* Form Action Bar: Privacy & Security assurance on left, Save button on right */}
+        <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center space-x-3 text-xs text-slate-400">
+            <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+            <p className="leading-relaxed">
+              <strong className="text-slate-300">Privacy & Security:</strong> Your keys are stored
+              locally on your machine in <code className="text-orange-400 font-mono">.env</code> and
+              loaded directly into Iðunn&apos;s runtime memory.
+            </p>
+          </div>
 
-        {/* Submit button locks in changes and initiates background persistence. */}
-        <div className="flex items-center justify-end space-x-3 pt-2">
           <button
             type="submit"
             disabled={saving}
-            className="px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-sm flex items-center space-x-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+            className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center space-x-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer whitespace-nowrap flex-shrink-0"
           >
             {saving ? (
               <>
@@ -724,32 +723,39 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
       </form>
 
       {/* GDPR / DPDP Privacy, Data Portability & Account Erasure */}
-      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
-        <div>
-          <h2 className="text-base font-semibold text-slate-200">
-            Data Privacy & Compliance (GDPR / DPDP)
-          </h2>
-          <p className="text-xs text-slate-400">
-            Export all personal kitchen records or execute irreversible cascade account erasure.
-          </p>
-        </div>
+      <div className="pt-6 border-t border-slate-800/80">
+        <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+          <div className="flex items-start space-x-3.5">
+            <div className="w-10 h-10 rounded-xl bg-slate-800 text-slate-300 flex items-center justify-center flex-shrink-0 mt-0.5 border border-slate-700/60">
+              <ShieldCheck className="w-5 h-5 text-slate-400" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-slate-200">
+                Data Privacy & Compliance (GDPR / DPDP)
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Export all personal kitchen records or execute irreversible cascade account erasure.
+              </p>
+            </div>
+          </div>
 
-        <div className="flex flex-wrap items-center gap-3 pt-2">
-          <button
-            type="button"
-            onClick={() => void handleExportData()}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer"
-          >
-            Download Data Archive (JSON)
-          </button>
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => void handleExportData()}
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer flex items-center space-x-2"
+            >
+              <span>Download Data Archive (JSON)</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => void handleDeleteAccount()}
-            className="px-4 py-2 rounded-xl bg-red-950/60 hover:bg-red-900/60 text-red-300 text-xs font-semibold border border-red-800/60 transition cursor-pointer"
-          >
-            Delete My Account & Data
-          </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteAccount()}
+              className="px-4 py-2.5 rounded-xl bg-red-950/60 hover:bg-red-900/60 text-red-300 text-xs font-semibold border border-red-800/60 transition cursor-pointer flex items-center space-x-2"
+            >
+              <span>Delete My Account & Data</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>
