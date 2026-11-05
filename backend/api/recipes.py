@@ -14,6 +14,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     Response,
     UploadFile,
 )
@@ -35,6 +36,7 @@ from ..models.recipe import (
 )
 from ..services.cooking_deduction import CookingDeductionService, DeductionReport
 from ..services.recipe_ingest import IngestResult, RecipeIngestService, confirmed_ids
+from .limiter import limiter
 
 router = APIRouter(prefix="/api/v1/recipes", tags=["recipes"])
 Database = Annotated[AsyncIOMotorDatabase, Depends(get_db)]
@@ -200,7 +202,9 @@ async def review_queue(
 
 
 @router.post("/ingest", response_model=IngestResult, status_code=201)
+@limiter.limit("15/minute;100/day")
 async def ingest_recipe(
+    request: Request,
     service: IngestService,
     url: str | None = Query(None, min_length=1, max_length=500),
     body: RecipeUrlInput | None = None,
@@ -208,6 +212,7 @@ async def ingest_recipe(
     """Import and parse a recipe from a web URL.
 
     Args:
+        request: Incoming HTTP request for rate limiting.
         service: Ingestion service dependency.
         url: URL provided via query parameter.
         body: URL provided via JSON body payload.
@@ -228,13 +233,16 @@ async def ingest_recipe(
 
 
 @router.post("/ingest/text", response_model=IngestResult, status_code=201)
+@limiter.limit("15/minute;100/day")
 async def ingest_recipe_text(
+    request: Request,
     payload: RecipeTextInput,
     service: IngestService,
 ) -> IngestResult:
     """Import and extract structured recipe from pasted text.
 
     Args:
+        request: Incoming HTTP request for rate limiting.
         payload: Input text and attribution name.
         service: Ingestion service dependency.
 

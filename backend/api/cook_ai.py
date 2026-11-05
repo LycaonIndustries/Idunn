@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from backend.config import settings
 from backend.db import get_db
@@ -24,6 +24,8 @@ from backend.models.recipe import Recipe
 from backend.services.pantry_to_plate import PantryToPlateService
 from backend.services.recipe_matching import RecipeMatchingService
 from backend.services.substitution_engine import SubstitutionEngine
+
+from .limiter import limiter
 
 logger = logging.getLogger("backend.api.cook_ai")
 
@@ -107,25 +109,28 @@ async def get_substitutions(
     response_model=PantryToPlateRecipe,
     summary="Generate custom recipe on-the-fly from active pantry inventory",
 )
+@limiter.limit("10/minute;60/hour")
 async def generate_pantry_recipe(
-    request: PantryToPlateRequest,
+    request: Request,
+    payload: PantryToPlateRequest,
     db=Depends(get_db),
 ) -> PantryToPlateRecipe:
     """Explicit user-triggered action to synthesize an inventive recipe from current pantry.
 
     Args:
-        request: PantryToPlateRequest parameters.
+        request: Incoming HTTP request for rate limiting.
+        payload: PantryToPlateRequest parameters.
         db: Database session dependency.
 
     Returns:
         PantryToPlateRecipe containing customized recipe.
     """
-    logger.info("Generating pantry-to-plate recipe for %s servings", request.servings)
+    logger.info("Generating pantry-to-plate recipe for %s servings", payload.servings)
 
     # Fetch active unconsumed inventory items.
     query: dict[str, object] = {"consumed": False}
-    if request.selected_item_ids:
-        query["_id"] = {"$in": request.selected_item_ids}
+    if payload.selected_item_ids:
+        query["_id"] = {"$in": payload.selected_item_ids}
 
     raw_inventory = await db.inventory.find(query).to_list(length=1000)
     inventory: list[Item] = []
@@ -141,4 +146,4 @@ async def generate_pantry_recipe(
         )
 
     service = PantryToPlateService(settings)
-    return await service.generate_recipe(request, inventory)
+    return await service.generate_recipe(payload, inventory)

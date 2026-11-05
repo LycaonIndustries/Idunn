@@ -10,6 +10,7 @@ from fastapi import (
     Depends,
     File,
     Form,
+    Request,
     UploadFile,
     status,
 )
@@ -21,6 +22,7 @@ from ..db import COLLECTION_ITEMS, COLLECTION_RECEIPTS, get_db
 from ..models.receipt import Receipt, ReceiptConfirmRequest
 from ..security.upload_validation import read_and_validate_upload
 from ..services.receipt_ingest import ReceiptIngestService
+from .limiter import limiter
 
 router = APIRouter(prefix="/api/v1/receipts", tags=["receipts"])
 Database = Annotated[AsyncIOMotorDatabase, Depends(get_db)]
@@ -51,7 +53,9 @@ class ReceiptConfirmResponse(BaseModel):
     response_model=Receipt,
     status_code=status.HTTP_200_OK,
 )
+@limiter.limit("10/minute;50/day")
 async def ingest_receipt_image(
+    request: Request,
     service: ReceiptService,
     db: Database,
     file: UploadFile = File(...),
@@ -60,6 +64,7 @@ async def ingest_receipt_image(
     """Extract grocery candidate items from uploaded receipt image or app screenshot.
 
     Args:
+        request: Incoming HTTP request for rate limiting.
         file: Uploaded image file (JPEG, PNG, WEBP).
         store_hint: Optional manual store name override.
         service: Injected receipt extraction service.

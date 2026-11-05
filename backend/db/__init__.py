@@ -157,6 +157,7 @@ COLLECTION_SHOPPING_LISTS = "shopping_lists"
 COLLECTION_RECEIPTS = "receipts"
 COLLECTION_NUTRITION = "nutrition"
 COLLECTION_EVAL_RUNS = "eval_runs"
+COLLECTION_AI_USAGE = "ai_usage"
 
 
 def get_collection(collection_name: str) -> Any:
