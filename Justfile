@@ -60,6 +60,10 @@ review-verify:
 pr-check: check review-verify
     git push origin (git branch --show-current)
 
+# Run asynchronous background task queue worker
+worker:
+    uv run python -m arq backend.workers.tasks.WorkerSettings
+
 # Start fullstack development server
 dev:
     python main.py
