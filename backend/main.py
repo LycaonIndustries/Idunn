@@ -16,6 +16,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from postgrest.exceptions import APIError
 from pymongo.errors import PyMongoError
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -35,7 +36,6 @@ from .api import settings as settings_api
 from .api.limiter import limiter
 from .config import settings
 from .db import MongoClient
-from .db.schemas import setup_database_validation
 from .logging_config import setup_logging
 from .services.ingest_errors import (
     ExtractionError,
@@ -64,30 +64,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     # Attempt connecting to active database backend.
     print(f"Starting {settings.app_name} v{settings.app_version}")
-    if settings.database_backend == "supabase":
-        from .db.supabase_client import SupabaseClientManager
+    from .db.supabase_client import SupabaseClientManager
 
-        if SupabaseClientManager.is_configured():
-            print("Database connected: True (Supabase Cloud)")
-            try:
-                await SupabaseClientManager.hydrate_all()
-            except Exception as exc:
-                print(f"Warning during Supabase collection hydration: {exc}")
-        else:
-            print("Database operating in local dev mode (In-Memory)")
+    if SupabaseClientManager.is_configured():
+        print("Database connected: True (Supabase Cloud)")
+        try:
+            await SupabaseClientManager.hydrate_all()
+        except Exception as exc:
+            print(f"Warning during Supabase collection hydration: {exc}")
     else:
-        is_connected = await MongoClient.ping()
-        if is_connected:
-            print("MongoDB connected: True (Live MongoDB)")
-            try:
-                # Apply schema validation rules to prevent corrupt documents.
-                await setup_database_validation(MongoClient.get_db())
-            except Exception as exc:
-                print(f"Warning during MongoDB schema setup: {exc}")
-        else:
-            # Fall back to in-memory mock client when developer does not run local daemon.
-            print("MongoDB offline on localhost:27017 -> using in-memory mock storage (Dev Mode)")
-            MongoClient.enable_in_memory_fallback()
+        print("Database operating in local dev mode (In-Memory)")
 
     from .services.settings_storage import load_persisted_settings
 
@@ -188,8 +174,9 @@ async def ingest_error_handler(request: Request, exc: IngestError) -> JSONRespon
     return JSONResponse(status_code=codes.get(type(exc), 422), content={"detail": str(exc)})
 
 
+@app.exception_handler(APIError)
 @app.exception_handler(PyMongoError)
-async def database_error_handler(request: Request, exc: PyMongoError) -> JSONResponse:
+async def database_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch unhandled database errors and return sanitized 503 error.
 
     Args:
@@ -222,9 +209,9 @@ async def health_check() -> dict[str, str]:
         return _cached_health_response
 
     # Check if database is responding or operating in memory mode.
-    mongo_ok = await MongoClient.ping()
+    db_ok = await MongoClient.ping()
     is_mock = MongoClient.is_mock()
-    if mongo_ok and not is_mock:
+    if db_ok and not is_mock:
         db_state = "connected"
     elif is_mock:
         db_state = "in-memory-dev"
@@ -232,10 +219,11 @@ async def health_check() -> dict[str, str]:
         db_state = "disconnected"
 
     response = {
-        "status": "healthy" if (mongo_ok or is_mock) else "degraded",
+        "status": "healthy" if (db_ok or is_mock) else "degraded",
         "app": settings.app_name,
         "version": settings.app_version,
-        "mongodb": db_state,
+        "database": db_state,
+        "backend": "supabase",
     }
     _last_health_check_time = now
     _cached_health_response = response

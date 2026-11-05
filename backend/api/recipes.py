@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from bson import ObjectId
 from fastapi import (
@@ -74,22 +74,24 @@ def get_ingest_service(db: Database) -> RecipeIngestService:
 IngestService = Annotated[RecipeIngestService, Depends(get_ingest_service)]
 
 
-def object_id(value: str) -> ObjectId:
-    """Validate and convert a string identifier to a MongoDB ObjectId.
+def object_id(value: str) -> Any:
+    """Validate and convert record identifier.
 
     Args:
-        value: String representation of ObjectId.
+        value: String representation of record ID.
 
     Returns:
-        Converted ObjectId instance.
+        ObjectId if valid 24-character hex, otherwise sanitized string.
 
     Raises:
-        HTTPException: If value is not a valid 24-character hexadecimal ObjectId.
+        HTTPException: If identifier is empty.
     """
-    # Reject invalid hex strings early before querying database collections.
-    if not ObjectId.is_valid(value):
+    clean = str(value).strip() if value is not None else ""
+    if not clean:
         raise HTTPException(status_code=400, detail="Invalid ID")
-    return ObjectId(value)
+    if ObjectId.is_valid(clean):
+        return ObjectId(clean)
+    return clean
 
 
 def recipe_response(doc: dict) -> Recipe:
@@ -101,8 +103,11 @@ def recipe_response(doc: dict) -> Recipe:
     Returns:
         Validated Recipe model instance.
     """
-    # Transform database ObjectId into string format expected by clients.
-    return Recipe.model_validate({**doc, "_id": str(doc["_id"])})
+    # Transform database identifier into string format expected by clients.
+    rec_dict = dict(doc)
+    rec_id = str(rec_dict.get("_id") or rec_dict.get("id") or "")
+    rec_dict["_id"] = rec_id
+    return Recipe.model_validate(rec_dict)
 
 
 def revision_filter(doc: dict, revision: int) -> dict:

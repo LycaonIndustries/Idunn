@@ -300,6 +300,23 @@ class SupabaseCollection:
             res = await self.memory.insert_one(doc)
             return InsertResult(res.inserted_id)
 
+    async def _match_memory_flex_id(self, filter_query: dict[str, Any]) -> dict[str, Any] | None:
+        """Resolve document from in-memory collection trying string and ObjectId variants of ID."""
+        doc_id = filter_query.get("_id") or filter_query.get("id")
+        if doc_id is None:
+            return None
+        str_id = _format_id(doc_id)
+        alt_str = {**filter_query, "_id": str_id}
+        alt_str.pop("id", None)
+        found = await self.memory.find_one(alt_str)
+        if found:
+            return found
+        if ObjectId.is_valid(str_id):
+            alt_obj = {**filter_query, "_id": ObjectId(str_id)}
+            alt_obj.pop("id", None)
+            return await self.memory.find_one(alt_obj)
+        return None
+
     async def find_one(self, filter_query: dict[str, Any]) -> dict[str, Any] | None:
         """Find a single document matching criteria.
 
@@ -309,13 +326,8 @@ class SupabaseCollection:
         Returns:
             Matching document or None if not found.
         """
-        if not self.is_live_supabase:
-            doc = await self.memory.find_one(filter_query)
-            return self._restore_id(doc) if doc else None
-
-        # Query directly by primary key when filter contains id.
         doc_id = filter_query.get("_id") or filter_query.get("id")
-        if doc_id:
+        if self.is_live_supabase and doc_id:
             str_id = _format_id(doc_id)
             loop = asyncio.get_running_loop()
             try:
@@ -325,8 +337,9 @@ class SupabaseCollection:
             except Exception:
                 pass
 
-        # Fall back to in-memory store for complex filters.
         doc = await self.memory.find_one(filter_query)
+        if not doc and doc_id is not None:
+            doc = await self._match_memory_flex_id(filter_query)
         return self._restore_id(doc) if doc else None
 
     def find(self, filter_query: dict[str, Any] | None = None) -> Any:
@@ -356,16 +369,34 @@ class SupabaseCollection:
             UpdateResult with modified document count.
         """
         res = await self.memory.update_one(filter_query, update)
-        if self.is_live_supabase:
-            doc_id = filter_query.get("_id") or filter_query.get("id")
-            if doc_id and "$set" in update:
-                str_id = _format_id(doc_id)
-                clean_updates = self._clean_doc_for_supabase(update["$set"])
-                clean_updates.pop("id", None)
-                loop = asyncio.get_running_loop()
-                with contextlib.suppress(Exception):
-                    await self._execute_remote_update(loop, str_id, clean_updates)
-        return UpdateResult(res.modified_count if hasattr(res, "modified_count") else 1)
+        modified_count = getattr(res, "modified_count", 0)
+        doc_id = filter_query.get("_id") or filter_query.get("id")
+
+        if modified_count == 0 and doc_id is not None:
+            str_id = _format_id(doc_id)
+            alt_str = {**filter_query, "_id": str_id}
+            alt_str.pop("id", None)
+            res_str = await self.memory.update_one(alt_str, update)
+            if getattr(res_str, "modified_count", 0) > 0:
+                modified_count = res_str.modified_count
+            elif ObjectId.is_valid(str_id):
+                alt_obj = {**filter_query, "_id": ObjectId(str_id)}
+                alt_obj.pop("id", None)
+                res_obj = await self.memory.update_one(alt_obj, update)
+                if getattr(res_obj, "modified_count", 0) > 0:
+                    modified_count = res_obj.modified_count
+
+        if self.is_live_supabase and doc_id and "$set" in update:
+            str_id = _format_id(doc_id)
+            clean_updates = self._clean_doc_for_supabase(update["$set"])
+            clean_updates.pop("id", None)
+            loop = asyncio.get_running_loop()
+            with contextlib.suppress(Exception):
+                await self._execute_remote_update(loop, str_id, clean_updates)
+            if modified_count == 0:
+                modified_count = 1
+
+        return UpdateResult(modified_count)
 
     async def delete_one(self, filter_query: dict[str, Any]) -> DeleteResult:
         """Delete a single document matching query.
@@ -377,14 +408,32 @@ class SupabaseCollection:
             DeleteResult with deleted document count.
         """
         res = await self.memory.delete_one(filter_query)
-        if self.is_live_supabase:
-            doc_id = filter_query.get("_id") or filter_query.get("id")
-            if doc_id:
-                str_id = _format_id(doc_id)
-                loop = asyncio.get_running_loop()
-                with contextlib.suppress(Exception):
-                    await self._execute_remote_delete(loop, str_id)
-        return DeleteResult(res.deleted_count if hasattr(res, "deleted_count") else 1)
+        deleted_count = getattr(res, "deleted_count", 0)
+        doc_id = filter_query.get("_id") or filter_query.get("id")
+
+        if deleted_count == 0 and doc_id is not None:
+            str_id = _format_id(doc_id)
+            alt_str = {**filter_query, "_id": str_id}
+            alt_str.pop("id", None)
+            res_str = await self.memory.delete_one(alt_str)
+            if getattr(res_str, "deleted_count", 0) > 0:
+                deleted_count = res_str.deleted_count
+            elif ObjectId.is_valid(str_id):
+                alt_obj = {**filter_query, "_id": ObjectId(str_id)}
+                alt_obj.pop("id", None)
+                res_obj = await self.memory.delete_one(alt_obj)
+                if getattr(res_obj, "deleted_count", 0) > 0:
+                    deleted_count = res_obj.deleted_count
+
+        if self.is_live_supabase and doc_id:
+            str_id = _format_id(doc_id)
+            loop = asyncio.get_running_loop()
+            with contextlib.suppress(Exception):
+                await self._execute_remote_delete(loop, str_id)
+            if deleted_count == 0:
+                deleted_count = 1
+
+        return DeleteResult(deleted_count)
 
     async def delete_many(self, filter_query: dict[str, Any]) -> DeleteResult:
         """Delete multiple documents matching criteria.
