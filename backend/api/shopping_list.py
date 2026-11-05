@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 
 from backend.db import get_db
 from backend.models.shopping import (
@@ -16,6 +17,10 @@ from backend.models.shopping import (
     ShoppingListItemCreate,
     ShoppingListItemUpdate,
     generate_quick_commerce_links,
+)
+from backend.services.export_formatters import (
+    format_whatsapp_shopping_list,
+    generate_whatsapp_share_url,
 )
 from backend.services.gap_list import generate_pantry_gap_shopping_list
 
@@ -255,3 +260,41 @@ async def generate_plan_gap_shopping_list(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+
+class WhatsAppExportResponse(BaseModel):
+    """Payload returning formatted text and launch URL for WhatsApp."""
+
+    text: str = Field(description="Formatted WhatsApp text message")
+    whatsapp_url: str = Field(description="WhatsApp universal share URL")
+
+
+@router.get(
+    "/export/whatsapp",
+    response_model=WhatsAppExportResponse,
+    summary="Export shopping list to WhatsApp formatted text",
+)
+async def export_shopping_list_whatsapp(
+    db=Depends(get_db),
+) -> WhatsAppExportResponse:
+    """Generate emoji-formatted WhatsApp message for shopping list.
+
+    Args:
+        db: Database session dependency.
+
+    Returns:
+        WhatsAppExportResponse containing message and share URL.
+    """
+    # Fetch shopping list items from database.
+    raw_items = await db.shopping_list.find({}).to_list(length=1000)
+    items = [
+        ShoppingListItem.model_validate({**doc, "_id": str(doc.get("_id", ""))})
+        for doc in raw_items
+    ]
+
+    # Format into categorized WhatsApp text with universal web link.
+    text = format_whatsapp_shopping_list(items)
+    return WhatsAppExportResponse(
+        text=text,
+        whatsapp_url=generate_whatsapp_share_url(text),
+    )

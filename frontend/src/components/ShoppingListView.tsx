@@ -3,6 +3,7 @@ import {
   clearPurchasedShoppingItems,
   createShoppingItem,
   deleteShoppingItem,
+  exportShoppingListWhatsApp,
   fetchShoppingList,
   updateShoppingItem,
 } from '../api'
@@ -84,6 +85,26 @@ export function ShoppingListView() {
     }
   }
 
+  async function handleShareWhatsApp() {
+    try {
+      const exportData = await exportShoppingListWhatsApp()
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        try {
+          await navigator.share({
+            title: 'Iðunn Grocery List',
+            text: exportData.text,
+          })
+          return
+        } catch {
+          // Fall through to browser URL launch.
+        }
+      }
+      window.open(exportData.whatsapp_url, '_blank')
+    } catch (err: any) {
+      setError(err.message || 'Failed to export to WhatsApp')
+    }
+  }
+
   const uncheckedItems = items.filter((x) => !x.checked)
   const checkedItems = items.filter((x) => x.checked)
 
@@ -96,14 +117,36 @@ export function ShoppingListView() {
             Track ingredients to buy and 1-click order via Quick-Commerce.
           </p>
         </div>
-        {checkedItems.length > 0 && (
-          <button
-            onClick={() => void handleClearPurchased()}
-            className="px-3 py-1.5 text-xs font-semibold rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
-          >
-            Clear Purchased ({checkedItems.length})
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {items.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={() => void handleShareWhatsApp()}
+                className="px-3 py-1.5 text-xs font-semibold rounded-md bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1.5 cursor-pointer"
+                title="Share formatted list via WhatsApp"
+              >
+                <span>WhatsApp</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="px-3 py-1.5 text-xs font-semibold rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5 cursor-pointer"
+                title="Print refrigerator summary"
+              >
+                <span>Print</span>
+              </button>
+            </>
+          )}
+          {checkedItems.length > 0 && (
+            <button
+              onClick={() => void handleClearPurchased()}
+              className="px-3 py-1.5 text-xs font-semibold rounded-md bg-gray-100 hover:bg-gray-200 text-gray-700 transition"
+            >
+              Clear Purchased ({checkedItems.length})
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
