@@ -20,6 +20,8 @@ import type {
   ShoppingListItemUpdate,
   SubstitutionSuggestion,
   UpdateSettingsPayload,
+  MealSlotUpdateRequest,
+  WeeklyMealPlan,
 } from './types'
 
 // Leave BASE_URL empty so requests use relative paths against the current origin.
@@ -570,6 +572,41 @@ export async function generatePantryRecipe(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+
+/**
+ * Fetch or initialize the active 7-day weekly meal plan.
+ */
+export async function fetchWeeklyMealPlan(weekStartDate?: string): Promise<WeeklyMealPlan> {
+  const url = weekStartDate
+    ? `${BASE_URL}/api/v1/planner?week_start_date=${encodeURIComponent(weekStartDate)}`
+    : `${BASE_URL}/api/v1/planner`
+  const res = await fetch(url)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Assign, adjust servings, or clear a specific meal slot in a weekly plan.
+ */
+export async function updateMealSlot(
+  planId: string,
+  slotUpdate: MealSlotUpdateRequest,
+): Promise<WeeklyMealPlan> {
+  const res = await fetch(`${BASE_URL}/api/v1/planner/${planId}/slot`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(slotUpdate),
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
