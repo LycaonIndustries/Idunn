@@ -62,20 +62,39 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     Yields:
         Control back to the web application runtime.
     """
-    # Attempt connecting to live MongoDB database.
+    # Attempt connecting to active database backend.
     print(f"Starting {settings.app_name} v{settings.app_version}")
-    is_connected = await MongoClient.ping()
-    if is_connected:
-        print("MongoDB connected: True (Live MongoDB)")
-        try:
-            # Apply schema validation rules to prevent corrupt documents.
-            await setup_database_validation(MongoClient.get_db())
-        except Exception as exc:
-            print(f"Warning during MongoDB schema setup: {exc}")
+    if settings.database_backend == "supabase":
+        from .db.supabase_client import SupabaseClientManager
+
+        if SupabaseClientManager.is_configured():
+            print("Database connected: True (Supabase Cloud)")
+            try:
+                await SupabaseClientManager.hydrate_all()
+            except Exception as exc:
+                print(f"Warning during Supabase collection hydration: {exc}")
+        else:
+            print("Database operating in local dev mode (In-Memory)")
     else:
-        # Fall back to in-memory mock client when developer does not run local daemon.
-        print("MongoDB offline on localhost:27017 -> using in-memory mock storage (Dev Mode)")
-        MongoClient.enable_in_memory_fallback()
+        is_connected = await MongoClient.ping()
+        if is_connected:
+            print("MongoDB connected: True (Live MongoDB)")
+            try:
+                # Apply schema validation rules to prevent corrupt documents.
+                await setup_database_validation(MongoClient.get_db())
+            except Exception as exc:
+                print(f"Warning during MongoDB schema setup: {exc}")
+        else:
+            # Fall back to in-memory mock client when developer does not run local daemon.
+            print("MongoDB offline on localhost:27017 -> using in-memory mock storage (Dev Mode)")
+            MongoClient.enable_in_memory_fallback()
+
+    from .services.settings_storage import load_persisted_settings
+
+    try:
+        await load_persisted_settings()
+    except Exception as exc:
+        print(f"Warning during settings loading: {exc}")
     try:
         yield
     finally:

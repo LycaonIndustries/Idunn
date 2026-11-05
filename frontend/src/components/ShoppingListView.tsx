@@ -23,21 +23,29 @@ export function ShoppingListView() {
   const [quantity, setQuantity] = useState('1')
   const [unit, setUnit] = useState('piece')
 
-  async function loadList() {
-    try {
-      setLoading(true)
-      const data = await fetchShoppingList()
-      setItems(data)
-      setError(null)
-    } catch (err: any) {
-      setError(err.message || 'Failed to load shopping list')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    void loadList()
+    let cancelled = false
+    async function init() {
+      try {
+        const data = await fetchShoppingList()
+        if (!cancelled) {
+          setItems(data)
+          setError(null)
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err.message || 'Failed to load shopping list')
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+    void init()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   async function handleAddItem(e: React.FormEvent) {

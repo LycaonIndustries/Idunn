@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   KeyRound,
   ShieldCheck,
@@ -67,11 +67,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
   const [showOpenAI, setShowOpenAI] = useState(false)
   const [showVoyage, setShowVoyage] = useState(false)
 
-  /**
-   * Loads current settings configuration and masked credentials from the backend.
-   */
-  const loadStatus = async () => {
-    setLoading(true)
+  const loadStatus = useCallback(async () => {
     try {
       const data = await fetchSettingsStatus()
       setStatus(data)
@@ -83,11 +79,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   // Load existing configuration once on component mount to populate status badges.
   useEffect(() => {
-    void loadStatus()
+    let cancelled = false
+    void fetchSettingsStatus()
+      .then((data) => {
+        if (!cancelled) {
+          setStatus(data)
+          if (data.gemini_model) setGeminiModel(data.gemini_model)
+          if (data.supabase_url) setSupabaseUrl(data.supabase_url)
+          setLoading(false)
+        }
+      })
+      .catch((err: unknown) => {
+        console.error('Failed to load settings:', err)
+        if (!cancelled) {
+          setMessage({ type: 'error', text: 'Could not connect to settings backend.' })
+          setLoading(false)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   /**

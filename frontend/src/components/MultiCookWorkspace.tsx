@@ -1,5 +1,5 @@
 import { Flame, Timer, X } from 'lucide-react'
-import { useMultiCook } from '../context/MultiCookContext'
+import { useMultiCook } from '../context/useMultiCook'
 import type { Recipe } from '../types'
 
 interface MultiCookWorkspaceProps {

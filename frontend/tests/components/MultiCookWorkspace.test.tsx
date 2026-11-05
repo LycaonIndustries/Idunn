@@ -1,6 +1,7 @@
 import { describe, expect, it, mock } from 'bun:test'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { MultiCookProvider, useMultiCook } from '../../src/context/MultiCookContext'
+import { MultiCookProvider } from '../../src/context/MultiCookContext'
+import { useMultiCook } from '../../src/context/useMultiCook'
 import { MultiCookWorkspace } from '../../src/components/MultiCookWorkspace'
 import type { Recipe } from '../../src/types'
 

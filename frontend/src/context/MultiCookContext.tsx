@@ -1,49 +1,13 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import type { Recipe } from '../types'
-
-export interface ActiveCookTimer {
-  id: string
-  label: string
-  remainingSeconds: number
-  totalSeconds: number
-  isRunning: boolean
-}
-
-export interface ActiveCookItem {
-  recipe: Recipe
-  activeStep: number | null
-  completedSteps: Record<number, boolean>
-  timers: ActiveCookTimer[]
-}
-
-interface MultiCookContextValue {
-  sessions: ActiveCookItem[]
-  activeRecipeId: string | null
-  startCooking: (recipe: Recipe) => void
-  stopCooking: (recipeId: string) => void
-  setActiveRecipeId: (recipeId: string) => void
-  setActiveStep: (recipeId: string, stepNumber: number | null) => void
-  toggleStepCompleted: (recipeId: string, stepNumber: number) => void
-  addTimer: (recipeId: string, label: string, durationSeconds: number) => void
-  toggleTimer: (recipeId: string, timerId: string) => void
-  resetTimer: (recipeId: string, timerId: string) => void
-}
-
-const DEFAULT_VALUE: MultiCookContextValue = {
-  sessions: [],
-  activeRecipeId: null,
-  startCooking: () => {},
-  stopCooking: () => {},
-  setActiveRecipeId: () => {},
-  setActiveStep: () => {},
-  toggleStepCompleted: () => {},
-  addTimer: () => {},
-  toggleTimer: () => {},
-  resetTimer: () => {},
-}
-
-const STORAGE_KEY = 'idunn_multi_cook_v1'
-const MultiCookContext = createContext<MultiCookContextValue>(DEFAULT_VALUE)
+import type {
+  ActiveCookItem,
+  ActiveCookTimer,
+} from './multiCookContextDef'
+import {
+  MultiCookContext,
+  STORAGE_KEY,
+} from './multiCookContextDef'
 
 export function MultiCookProvider({ children }: { children: React.ReactNode }) {
   // Load saved multi-dish cooking sessions from local storage.
@@ -217,6 +181,4 @@ export function MultiCookProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function useMultiCook() {
-  return useContext(MultiCookContext)
-}
+

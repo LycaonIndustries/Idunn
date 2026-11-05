@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -34,7 +34,7 @@ def expiring_item():
         "quantity": 1.0,
         "unit": Unit.LITER.value,
         "location": Location.FRIDGE.value,
-        "expiry_date": (datetime.utcnow() + timedelta(days=2)).isoformat(),
+        "expiry_date": (datetime.now(UTC) + timedelta(days=2)).isoformat(),
     }
 
 
