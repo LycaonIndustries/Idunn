@@ -33,7 +33,7 @@ RUN uv sync --no-dev --no-install-project
 
 # Copy backend source
 COPY backend/ backend/
-COPY main.py ./
+COPY main.py README.md ./
 
 # Copy built frontend from stage 1
 COPY --from=frontend-build /build/backend/web_dist backend/web_dist/
