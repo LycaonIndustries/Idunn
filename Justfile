@@ -40,8 +40,12 @@ format:
 build-frontend:
     bun run --cwd frontend build
 
-# Run all linters and test suites as a pre-push quality gate
-check: lint test
+# Run runtime contract smoke test against live FastAPI app
+smoke:
+    uv run python scripts/smoke_test.py
+
+# Run all linters, test suites, and runtime smoke checks as a pre-push quality gate
+check: lint test smoke
 
 # Run dependency vulnerability security audit across Python backend and Bun frontend
 audit:

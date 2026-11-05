@@ -67,10 +67,13 @@ class MealPlanUpdateRequest(BaseModel):
 class MealSlotUpdateRequest(BaseModel):
     """Input payload to mutate or assign a single meal slot."""
 
-    date: str = Field(..., description="Target ISO date (YYYY-MM-DD)")
+    date: str | None = Field(default=None, description="Target ISO date (YYYY-MM-DD)")
+    day_of_week: str | None = Field(default=None, description="Target day of week (e.g. monday)")
     meal_type: MealType = Field(..., description="Target meal type")
     recipe_id: str | None = Field(default=None, description="Vault recipe ID")
     custom_title: str | None = Field(default=None, description="Custom title")
+    recipe_title: str | None = Field(default=None, description="Recipe title alias")
     servings: float = Field(default=2.0, gt=0, description="Serving count")
+    servings_multiplier: float | None = Field(default=None, description="Serving multiplier scaler")
     notes: str | None = Field(default=None, description="Notes")
     completed: bool = Field(default=False, description="Completed flag")

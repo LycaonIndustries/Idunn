@@ -21,7 +21,7 @@ from ..models.inventory import (
 )
 from .deps import AuthenticatedUser, get_current_user
 
-router = APIRouter(prefix="/api/v1/items", tags=["inventory"])
+router = APIRouter(tags=["inventory"])
 
 
 def owner_filter(user_id: str) -> dict:
@@ -34,7 +34,9 @@ def owner_filter(user_id: str) -> dict:
         Mongo query dictionary scoped to tenant.
     """
     if user_id == "dev_user_local":
-        return {"$or": [{"owner_id": user_id}, {"owner_id": {"$exists": False}}]}
+        return {
+            "$or": [{"owner_id": user_id}, {"owner_id": {"$exists": False}}, {"owner_id": None}]
+        }
     return {"owner_id": user_id}
 
 

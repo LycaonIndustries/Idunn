@@ -135,7 +135,8 @@ async def log_requests_middleware(request: Request, call_next):
 
 
 # Mount primary sub-routers for inventory, master ingredients, and recipes.
-app.include_router(inventory.router)
+app.include_router(inventory.router, prefix="/api/v1/items")
+app.include_router(inventory.router, prefix="/api/v1/inventory")
 app.include_router(ingredients.router)
 app.include_router(recipes.router)
 app.include_router(receipts.router)
@@ -185,6 +186,10 @@ async def database_error_handler(request: Request, exc: PyMongoError) -> JSONRes
     )
 
 
+_last_health_check_time: float = 0.0
+_cached_health_response: dict[str, str] | None = None
+
+
 @app.get("/health", tags=["health"])
 async def health_check() -> dict[str, str]:
     """Perform health and connectivity diagnostics for the server.
@@ -192,6 +197,11 @@ async def health_check() -> dict[str, str]:
     Returns:
         Dictionary reporting health status and database backend mode.
     """
+    global _last_health_check_time, _cached_health_response
+    now = time.monotonic()
+    if _cached_health_response is not None and (now - _last_health_check_time) < 15.0:
+        return _cached_health_response
+
     # Check if database is responding or operating in memory mode.
     mongo_ok = await MongoClient.ping()
     is_mock = MongoClient.is_mock()
@@ -202,12 +212,15 @@ async def health_check() -> dict[str, str]:
     else:
         db_state = "disconnected"
 
-    return {
+    response = {
         "status": "healthy" if (mongo_ok or is_mock) else "degraded",
         "app": settings.app_name,
         "version": settings.app_version,
         "mongodb": db_state,
     }
+    _last_health_check_time = now
+    _cached_health_response = response
+    return response
 
 
 # Serve built single page application files when directory exists.
@@ -230,7 +243,7 @@ if WEB_DIST.is_dir():
         return JSONResponse(status_code=404, content={"detail": "Not found"})
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def spa_catch_all(full_path: str) -> FileResponse:
+    async def spa_catch_all(full_path: str) -> Response:
         """Serve index.html for all non-API paths to support client routing.
 
         Args:
@@ -239,6 +252,11 @@ if WEB_DIST.is_dir():
         Returns:
             FileResponse streaming the requested file or root index.html.
         """
+        # Never return index.html for API routes; return proper 404 JSON to clients.
+        if full_path.startswith("api/") or full_path.startswith("api"):
+            detail_msg = f"API endpoint /{full_path} not found"
+            return JSONResponse(status_code=404, content={"detail": detail_msg})
+
         # Verify if an exact static file exists on disk before defaulting to index.html.
         file_path = WEB_DIST / full_path
         if full_path and file_path.is_file():
