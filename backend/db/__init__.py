@@ -9,6 +9,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 
 from ..config import settings
+from .resilience import with_db_retry
 
 
 # Route collection requests to active storage engine.
@@ -108,6 +109,13 @@ class MongoClient:
         cls._is_mock = False
 
     @classmethod
+    @with_db_retry(max_attempts=2, initial_delay=0.1, max_delay=0.5)
+    async def _execute_ping(cls) -> bool:
+        """Run ping admin command against MongoDB socket."""
+        await cls.get_client().admin.command("ping")
+        return True
+
+    @classmethod
     async def ping(cls) -> bool:
         """Verify database connectivity.
 
@@ -122,8 +130,7 @@ class MongoClient:
         if cls._is_mock:
             return True
         try:
-            await cls.get_client().admin.command("ping")
-            return True
+            return await cls._execute_ping()
         except Exception:
             return False
 
