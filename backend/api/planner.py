@@ -197,15 +197,36 @@ async def update_meal_slot(
 
     doc["_id"] = str(doc.get("_id", ""))
     plan = WeeklyMealPlan.model_validate(doc)
-    day = next((d for d in plan.days if d.date == payload.date), None)
+
+    target_date = payload.date
+    target_day = (payload.day_of_week or "").lower()
+    day = next(
+        (
+            d
+            for d in plan.days
+            if (target_date and d.date == target_date)
+            or (target_day and d.day_of_week.lower() == target_day)
+        ),
+        None,
+    )
     if not day:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Date not in plan.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Specified date or day of week not found in active meal plan.",
+        )
+
+    title = payload.custom_title or payload.recipe_title
+    effective_servings = (
+        payload.servings * payload.servings_multiplier
+        if payload.servings_multiplier is not None
+        else payload.servings
+    )
 
     # Update matching slot attributes or append new slot.
     attrs = {
         "recipe_id": payload.recipe_id,
-        "custom_title": payload.custom_title,
-        "servings": payload.servings,
+        "custom_title": title,
+        "servings": effective_servings,
         "notes": payload.notes,
         "completed": payload.completed,
     }

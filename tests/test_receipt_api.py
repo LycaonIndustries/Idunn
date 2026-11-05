@@ -118,6 +118,14 @@ async def test_confirm_receipt_adds_items_to_pantry(client, db) -> None:
     assert onion is not None
     assert onion["quantity"] == 1.0
     assert onion["unit"] == "kg"
+    assert onion.get("owner_id") is not None
+
+    # Verify items are returned by the inventory API endpoint.
+    inv_res = client.get("/api/v1/inventory")
+    assert inv_res.status_code == 200
+    inv_names = [item["name"] for item in inv_res.json()]
+    assert "Amul Milk" in inv_names
+    assert "Onion" in inv_names
     assert onion["location"] == "pantry"
 
     # Verify receipt record is marked confirmed

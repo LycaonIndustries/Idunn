@@ -22,6 +22,7 @@ from ..db import COLLECTION_ITEMS, COLLECTION_RECEIPTS, get_db
 from ..models.receipt import Receipt, ReceiptConfirmRequest
 from ..security.upload_validation import read_and_validate_upload
 from ..services.receipt_ingest import ReceiptIngestService
+from .deps import OptionalUser
 from .limiter import limiter
 
 router = APIRouter(prefix="/api/v1/receipts", tags=["receipts"])
@@ -60,6 +61,7 @@ async def ingest_receipt_image(
     db: Database,
     file: UploadFile = File(...),
     store_hint: str | None = Form(None),
+    user: OptionalUser = None,
 ) -> Receipt:
     """Extract grocery candidate items from uploaded receipt image or app screenshot.
 
@@ -69,6 +71,7 @@ async def ingest_receipt_image(
         store_hint: Optional manual store name override.
         service: Injected receipt extraction service.
         db: Database session.
+        user: Optional authenticated caller identity.
 
     Returns:
         Receipt model populated with candidate items and shelf life projections.
@@ -87,6 +90,8 @@ async def ingest_receipt_image(
 
     # Persist unconfirmed receipt to allow user review before pantry addition.
     receipt_dict = receipt.model_dump(by_alias=True)
+    if user:
+        receipt_dict["owner_id"] = user.id
     await db[COLLECTION_RECEIPTS].insert_one(receipt_dict)
 
     return receipt
@@ -100,12 +105,14 @@ async def ingest_receipt_image(
 async def confirm_receipt_items(
     payload: ReceiptConfirmRequest,
     db: Database,
+    user: OptionalUser = None,
 ) -> ReceiptConfirmResponse:
     """Commit verified candidate items from receipt into pantry inventory.
 
     Args:
         payload: Confirmation request payload containing candidate items.
         db: Injected database handle.
+        user: Optional authenticated caller identity.
 
     Returns:
         ReceiptConfirmResponse confirming number of items added.
@@ -114,6 +121,7 @@ async def confirm_receipt_items(
         HTTPException: If receipt identifier is missing or no items provided.
     """
     now = datetime.now(UTC)
+    user_id = user.id if user else "dev_user_local"
     confirmed_count = 0
 
     # Add each approved candidate item to active pantry stock.
@@ -132,6 +140,7 @@ async def confirm_receipt_items(
             "added_at": now,
             "updated_at": now,
             "consumed": False,
+            "owner_id": user_id,
         }
         await db[COLLECTION_ITEMS].insert_one(item_dict)
         confirmed_count += 1
