@@ -9,12 +9,27 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 
 from ..config import settings
-from .resilience import with_db_retry
 
 
 # Route collection requests to active storage engine.
 class DatabaseRouter:
     """Routes collection lookups to Supabase or MongoDB based on configuration."""
+
+    COLLECTION_ALIASES: dict[str, str] = {
+        "inventory": "items",
+        "shopping_list": "shopping_lists",
+    }
+
+    def _resolve_name(self, name: str) -> str:
+        """Resolve canonical collection name using alias mappings.
+
+        Args:
+            name: Requested collection or table name.
+
+        Returns:
+            Canonical collection name.
+        """
+        return self.COLLECTION_ALIASES.get(name, name)
 
     def __getitem__(self, name: str) -> Any:
         """Resolve collection adapter by target collection name.
@@ -25,12 +40,80 @@ class DatabaseRouter:
         Returns:
             Collection adapter instance for Supabase or MongoDB.
         """
+        canonical_name = self._resolve_name(name)
         # Return Supabase client wrapper when configured for cloud storage.
         if settings.database_backend == "supabase":
             from .supabase_client import SupabaseClientManager
 
-            return SupabaseClientManager.get_collection(name)
-        return MongoClient.get_db()[name]
+            return SupabaseClientManager.get_collection(canonical_name)
+        return MongoClient.get_raw_db()[canonical_name]
+
+    def __getattr__(self, name: str) -> Any:
+        """Route attribute-based collection lookups (e.g., db.recipes, db.shopping_list).
+
+        Args:
+            name: Attribute collection name.
+
+        Returns:
+            Collection adapter instance.
+        """
+        if name.startswith("_"):
+            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+        return self[name]
+
+    async def list_collection_names(self) -> list[str]:
+        """List active collection or table names.
+
+        Returns:
+            List of collection names.
+        """
+        if settings.database_backend == "supabase":
+            from .supabase_client import SupabaseClientManager
+
+            return list(SupabaseClientManager._collections.keys()) or [
+                COLLECTION_ITEMS,
+                COLLECTION_INGREDIENTS,
+                COLLECTION_RECIPES,
+                COLLECTION_MEAL_PLANS,
+                COLLECTION_SHOPPING_LISTS,
+                COLLECTION_RECEIPTS,
+                COLLECTION_NUTRITION,
+                COLLECTION_EVAL_RUNS,
+                COLLECTION_AI_USAGE,
+            ]
+        raw_db = MongoClient.get_raw_db()
+        if hasattr(raw_db, "list_collection_names"):
+            return await raw_db.list_collection_names()
+        return []
+
+    async def command(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Execute administrative command on active backend.
+
+        Returns:
+            Command execution status dictionary.
+        """
+        if settings.database_backend != "supabase":
+            raw_db = MongoClient.get_raw_db()
+            if hasattr(raw_db, "command"):
+                return await raw_db.command(*args, **kwargs)
+        return {"ok": 1}
+
+    async def create_collection(self, name: str, **kwargs: Any) -> Any:
+        """Create collection on active database backend.
+
+        Args:
+            name: Target collection name.
+            **kwargs: Backend collection configuration arguments.
+
+        Returns:
+            Created or resolved collection adapter.
+        """
+        canonical_name = self._resolve_name(name)
+        if settings.database_backend != "supabase":
+            raw_db = MongoClient.get_raw_db()
+            if hasattr(raw_db, "create_collection"):
+                return await raw_db.create_collection(canonical_name, **kwargs)
+        return self[canonical_name]
 
 
 _db_router = DatabaseRouter()
@@ -60,17 +143,24 @@ class MongoClient:
         return cls._client
 
     @classmethod
+    def get_raw_db(cls) -> Any:
+        """Get underlying MongoDB database instance without routing layer.
+
+        Returns:
+            Active MongoDB database instance.
+        """
+        if cls._db is None:
+            cls._db = cls.get_client()[settings.mongodb_db_name]
+        return cls._db
+
+    @classmethod
     def get_db(cls) -> Any:
         """Get or initialize database reference.
 
         Returns:
             Database or router handle.
         """
-        if settings.database_backend == "supabase":
-            return _db_router
-        if cls._db is None:
-            cls._db = cls.get_client()[settings.mongodb_db_name]
-        return cls._db
+        return _db_router
 
     @classmethod
     def enable_in_memory_fallback(cls) -> None:
@@ -109,7 +199,6 @@ class MongoClient:
         cls._is_mock = False
 
     @classmethod
-    @with_db_retry(max_attempts=2, initial_delay=0.1, max_delay=0.5)
     async def _execute_ping(cls) -> bool:
         """Run ping admin command against MongoDB socket."""
         await cls.get_client().admin.command("ping")
