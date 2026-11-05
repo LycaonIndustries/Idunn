@@ -26,8 +26,8 @@ describe('MealPlannerCalendar Component', () => {
   }
 
   const mockRecipes: Recipe[] = [
-    { _id: 'rec_1', title: 'Masala Omelette', description: 'Quick egg breakfast', prep_time_minutes: 5, cook_time_minutes: 5, servings: 2, cuisine_type: 'Indian', ingredients: [{ name: 'Eggs', quantity: 2, unit: 'whole' }], steps: [{ step_number: 1, instruction: 'Beat eggs and fry.' }], tags: ['breakfast'], source_type: 'manual', created_at: '', updated_at: '' },
-    { _id: 'rec_2', title: 'Paneer Butter Masala', description: 'Rich tomato gravy', prep_time_minutes: 15, cook_time_minutes: 20, servings: 4, cuisine_type: 'North Indian', ingredients: [{ name: 'Paneer', quantity: 200, unit: 'g' }], steps: [{ step_number: 1, instruction: 'Cook gravy.' }], tags: ['dinner'], source_type: 'manual', created_at: '', updated_at: '' },
+    { _id: 'rec_1', title: 'Masala Omelette', description: 'Quick egg breakfast', prep_time_minutes: 5, cook_time_minutes: 5, servings: 2, cuisine_type: 'Indian', ingredients: [{ name: 'Eggs', quantity: 2, unit: 'whole' }], steps: [{ step_number: 1, instruction: 'Beat eggs and fry.' }], tags: ['breakfast'], created_at: '', updated_at: '' },
+    { _id: 'rec_2', title: 'Paneer Butter Masala', description: 'Rich tomato gravy', prep_time_minutes: 15, cook_time_minutes: 20, servings: 4, cuisine_type: 'North Indian', ingredients: [{ name: 'Paneer', quantity: 200, unit: 'g' }], steps: [{ step_number: 1, instruction: 'Cook gravy.' }], tags: ['dinner'], created_at: '', updated_at: '' },
   ]
 
   let lastPatchPayload: any = null

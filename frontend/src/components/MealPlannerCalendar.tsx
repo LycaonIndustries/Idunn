@@ -249,7 +249,7 @@ export function MealPlannerCalendar({ recipes, onSelectRecipe }: MealPlannerCale
                     <div>
                       <h4 className="text-sm font-semibold text-stone-100">{r.title}</h4>
                       <p className="text-xs text-stone-400">
-                        {r.cuisine_type || 'General'} • {r.prep_time_minutes + r.cook_time_minutes}m • {r.servings} servings
+                        {r.cuisine_type || 'General'} • {(r.prep_time_minutes || 0) + (r.cook_time_minutes || 0)}m • {r.servings} servings
                       </p>
                     </div>
                     <span className="rounded-lg bg-orange-500/10 px-2 py-1 text-xs font-semibold text-orange-400">
