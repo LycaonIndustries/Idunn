@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import httpx
 
+from ..db.resilience import with_provider_retry
 from ..models.inventory import Unit
 from ..models.receipt import (
     Receipt,
@@ -230,6 +231,28 @@ class ReceiptIngestService:
         # Fallback to Anthropic Claude when Gemini is not configured.
         raise ProviderNotConfiguredError("Gemini extractor is required for receipt images.")
 
+    @with_provider_retry(max_attempts=3, initial_delay=0.3, max_delay=1.5)
+    async def _post_gemini_request(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Send POST request to Gemini endpoint with retry on transient drops.
+
+        Args:
+            url: API endpoint URL.
+            payload: JSON payload dictionary.
+
+        Returns:
+            JSON response payload dictionary.
+
+        Raises:
+            ProviderError: If response status code is not 200.
+        """
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            response = await client.post(url, json=payload)
+            if response.status_code != 200:
+                raise ProviderError(
+                    f"Gemini API returned status {response.status_code}: {response.text[:200]}"
+                )
+            return response.json()
+
     async def _call_gemini(
         self,
         parts: list[dict[str, Any]],
@@ -257,15 +280,9 @@ class ReceiptIngestService:
             "generationConfig": {"response_mime_type": "application/json"},
         }
 
-        # Keep network timeout bounded to 45 seconds to keep API responsive.
+        # Keep network timeout bounded to 45 seconds and retry on transient drops.
         try:
-            async with httpx.AsyncClient(timeout=45.0) as client:
-                response = await client.post(url, json=payload)
-                if response.status_code != 200:
-                    raise ProviderError(
-                        f"Gemini API returned status {response.status_code}: {response.text[:200]}"
-                    )
-                data = response.json()
+            data = await self._post_gemini_request(url, payload)
         except httpx.HTTPError as exc:
             raise ProviderError("Gemini receipt extraction call failed.") from exc
 

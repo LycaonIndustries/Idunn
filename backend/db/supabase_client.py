@@ -17,6 +17,7 @@ from bson import ObjectId
 from supabase import Client, create_client
 
 from ..config import settings
+from .resilience import with_db_retry
 
 
 def _format_id(val: Any) -> str:
@@ -233,6 +234,47 @@ class SupabaseCollection:
             res["id"] = str(res["_id"])
         return res
 
+    @with_db_retry()
+    async def _execute_remote_insert(
+        self, loop: asyncio.AbstractEventLoop, clean: dict[str, Any]
+    ) -> Any:
+        """Execute remote Supabase insert with exponential backoff on transient errors."""
+        return await loop.run_in_executor(
+            None,
+            lambda: self.client.table(self.table_name).insert(clean).execute(),
+        )
+
+    @with_db_retry()
+    async def _execute_remote_find_one(self, loop: asyncio.AbstractEventLoop, str_id: str) -> Any:
+        """Execute remote Supabase primary key lookup with exponential backoff."""
+        return await loop.run_in_executor(
+            None,
+            lambda: self.client.table(self.table_name).select("*").eq("id", str_id).execute(),
+        )
+
+    @with_db_retry()
+    async def _execute_remote_update(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        str_id: str,
+        clean_updates: dict[str, Any],
+    ) -> Any:
+        """Execute remote Supabase row update with exponential backoff."""
+        return await loop.run_in_executor(
+            None,
+            lambda: (
+                self.client.table(self.table_name).update(clean_updates).eq("id", str_id).execute()
+            ),
+        )
+
+    @with_db_retry()
+    async def _execute_remote_delete(self, loop: asyncio.AbstractEventLoop, str_id: str) -> Any:
+        """Execute remote Supabase row deletion with exponential backoff."""
+        return await loop.run_in_executor(
+            None,
+            lambda: self.client.table(self.table_name).delete().eq("id", str_id).execute(),
+        )
+
     async def insert_one(self, doc: dict[str, Any]) -> InsertResult:
         """Insert a single document into Supabase and local cache.
 
@@ -249,11 +291,8 @@ class SupabaseCollection:
         clean = self._clean_doc_for_supabase(doc)
         loop = asyncio.get_running_loop()
         try:
-            # Dispatch synchronous PostgREST call to thread pool to avoid blocking async loop.
-            await loop.run_in_executor(
-                None,
-                lambda: self.client.table(self.table_name).insert(clean).execute(),
-            )
+            # Dispatch synchronous PostgREST call with exponential backoff on network errors.
+            await self._execute_remote_insert(loop, clean)
             await self.memory.insert_one(dict(clean, _id=clean["id"]))
             return InsertResult(clean["id"])
         except Exception:
@@ -280,12 +319,7 @@ class SupabaseCollection:
             str_id = _format_id(doc_id)
             loop = asyncio.get_running_loop()
             try:
-                res = await loop.run_in_executor(
-                    None,
-                    lambda: (
-                        self.client.table(self.table_name).select("*").eq("id", str_id).execute()
-                    ),
-                )
+                res = await self._execute_remote_find_one(loop, str_id)
                 if res.data and len(res.data) > 0:
                     return self._restore_id(res.data[0])
             except Exception:
@@ -330,15 +364,7 @@ class SupabaseCollection:
                 clean_updates.pop("id", None)
                 loop = asyncio.get_running_loop()
                 with contextlib.suppress(Exception):
-                    await loop.run_in_executor(
-                        None,
-                        lambda: (
-                            self.client.table(self.table_name)
-                            .update(clean_updates)
-                            .eq("id", str_id)
-                            .execute()
-                        ),
-                    )
+                    await self._execute_remote_update(loop, str_id, clean_updates)
         return UpdateResult(res.modified_count if hasattr(res, "modified_count") else 1)
 
     async def delete_one(self, filter_query: dict[str, Any]) -> DeleteResult:
@@ -357,12 +383,7 @@ class SupabaseCollection:
                 str_id = _format_id(doc_id)
                 loop = asyncio.get_running_loop()
                 with contextlib.suppress(Exception):
-                    await loop.run_in_executor(
-                        None,
-                        lambda: (
-                            self.client.table(self.table_name).delete().eq("id", str_id).execute()
-                        ),
-                    )
+                    await self._execute_remote_delete(loop, str_id)
         return DeleteResult(res.deleted_count if hasattr(res, "deleted_count") else 1)
 
     async def count_documents(self, filter_query: dict[str, Any] | None = None) -> int:
@@ -439,6 +460,15 @@ class SupabaseClientManager:
         cls._collections.clear()
 
     @classmethod
+    @with_db_retry(max_attempts=2, initial_delay=0.1, max_delay=0.5)
+    async def _execute_ping(cls, loop: asyncio.AbstractEventLoop, sb: Client) -> None:
+        """Execute ping query with exponential backoff on transient errors."""
+        await loop.run_in_executor(
+            None,
+            lambda: sb.table("recipes").select("id").limit(1).execute(),
+        )
+
+    @classmethod
     async def ping(cls) -> bool:
         """Check if Supabase cloud database responds.
 
@@ -449,10 +479,7 @@ class SupabaseClientManager:
         if sb is not None:
             try:
                 loop = asyncio.get_running_loop()
-                await loop.run_in_executor(
-                    None,
-                    lambda: sb.table("recipes").select("id").limit(1).execute(),
-                )
+                await cls._execute_ping(loop, sb)
                 return True
             except Exception:
                 return False
