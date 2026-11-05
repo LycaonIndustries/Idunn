@@ -386,6 +386,62 @@ class SupabaseCollection:
                     await self._execute_remote_delete(loop, str_id)
         return DeleteResult(res.deleted_count if hasattr(res, "deleted_count") else 1)
 
+    async def delete_many(self, filter_query: dict[str, Any]) -> DeleteResult:
+        """Delete multiple documents matching criteria.
+
+        Args:
+            filter_query: Selection criteria dictionary.
+
+        Returns:
+            DeleteResult with deleted document count.
+        """
+        res = await self.memory.delete_many(filter_query)
+        count = getattr(res, "deleted_count", 0)
+        return DeleteResult(count)
+
+    async def insert_many(self, docs: list[dict[str, Any]]) -> Any:
+        """Insert multiple documents in batch.
+
+        Args:
+            docs: List of document payloads to store.
+
+        Returns:
+            Batch insertion result handle.
+        """
+        for doc in docs:
+            if "_id" not in doc:
+                doc["_id"] = _format_id(None)
+        return await self.memory.insert_many(docs)
+
+    async def find_one_and_update(
+        self,
+        filter_query: dict[str, Any],
+        update: dict[str, Any],
+        **kwargs: Any,
+    ) -> dict[str, Any] | None:
+        """Find a single document and apply mutations atomically.
+
+        Args:
+            filter_query: Query criteria to locate record.
+            update: Mutation operator dictionary ($set, etc.).
+            **kwargs: Additional update flags (upsert, return_document).
+
+        Returns:
+            Mutated document dictionary or None.
+        """
+        return await self.memory.find_one_and_update(filter_query, update, **kwargs)
+
+    def aggregate(self, pipeline: list[dict[str, Any]]) -> Any:
+        """Execute aggregation pipeline against underlying storage.
+
+        Args:
+            pipeline: MongoDB aggregation pipeline stages.
+
+        Returns:
+            Async iterator or cursor yielding aggregation results.
+        """
+        return self.memory.aggregate(pipeline)
+
     async def count_documents(self, filter_query: dict[str, Any] | None = None) -> int:
         """Count total documents matching criteria.
 
@@ -460,9 +516,8 @@ class SupabaseClientManager:
         cls._collections.clear()
 
     @classmethod
-    @with_db_retry(max_attempts=2, initial_delay=0.1, max_delay=0.5)
     async def _execute_ping(cls, loop: asyncio.AbstractEventLoop, sb: Client) -> None:
-        """Execute ping query with exponential backoff on transient errors."""
+        """Execute ping query against Supabase database."""
         await loop.run_in_executor(
             None,
             lambda: sb.table("recipes").select("id").limit(1).execute(),

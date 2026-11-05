@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..config import settings
+
 # JSON Schema for items collection (inventory)
 ITEMS_SCHEMA: dict[str, Any] = {
     "bsonType": "object",
@@ -320,6 +322,9 @@ async def create_collection_with_validation(db, collection_name: str, schema: di
 
 async def setup_database_validation(db) -> None:
     """Set up JSON schema validation for all collections."""
+    # Supabase uses Postgres table definitions instead of MongoDB JSON schemas.
+    if settings.database_backend == "supabase":
+        return
     schemas = {
         "items": ITEMS_SCHEMA,
         "ingredients": INGREDIENTS_SCHEMA,

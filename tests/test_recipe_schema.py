@@ -3,11 +3,18 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from backend.config import settings
 from backend.db.recipe_search_indexes import vector_definition
 from backend.db.schemas import RECIPES_SCHEMA, setup_database_validation
 
 
-async def test_schema_setup_includes_recipes_and_uses_supplied_database():
+@pytest.mark.asyncio
+async def test_schema_setup_includes_recipes_and_uses_supplied_database(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "database_backend", "mongodb")
     db = MagicMock()
     db.list_collection_names = AsyncMock(return_value=["items", "ingredients", "recipes"])
     db.command = AsyncMock()
