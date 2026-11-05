@@ -115,6 +115,10 @@ class RecipeBase(BaseModel):
     video_url: str | None = Field(None, max_length=500, description="Video URL (YouTube)")
     tags: list[str] = Field(default_factory=list, description="Tags (e.g., 'lunch', 'dinner')")
     nutrition: NutritionInfo | None = Field(None, description="Nutrition per serving")
+    owner_id: str = Field(
+        default="dev_user_local",
+        description="Owner user identifier for tenant isolation",
+    )
 
 
 # Creation payload inherits all standard fields.

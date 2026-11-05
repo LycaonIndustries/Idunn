@@ -19,8 +19,23 @@ from ..models.inventory import (
     ItemUpdate,
     Location,
 )
+from .deps import AuthenticatedUser, get_current_user
 
 router = APIRouter(prefix="/api/v1/items", tags=["inventory"])
+
+
+def owner_filter(user_id: str) -> dict:
+    """Build tenant query filter supporting legacy untagged documents in dev mode.
+
+    Args:
+        user_id: Unique caller identifier.
+
+    Returns:
+        Mongo query dictionary scoped to tenant.
+    """
+    if user_id == "dev_user_local":
+        return {"$or": [{"owner_id": user_id}, {"owner_id": {"$exists": False}}]}
+    return {"owner_id": user_id}
 
 
 def get_items_collection():
@@ -36,12 +51,14 @@ def get_items_collection():
 async def create_item(
     item: ItemCreate,
     db: AsyncIOMotorDatabase = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> Item:
     """Add a new ingredient or grocery item to the kitchen pantry.
 
     Args:
         item: Item creation payload.
         db: Injected database handle.
+        user: Authenticated tenant context.
 
     Returns:
         Created Item record with persistent database identifier.
@@ -51,15 +68,17 @@ async def create_item(
     """
     collection = db[COLLECTION_ITEMS]
 
+    # Stamp tenant owner identity to enforce multi-user isolation.
     now = datetime.now(UTC)
     item_dict = item.model_dump()
+    item_dict["owner_id"] = user.id
     item_dict["added_at"] = now
     item_dict["updated_at"] = now
     item_dict["consumed"] = False
 
     result = await collection.insert_one(item_dict)
 
-    created = await collection.find_one({"_id": result.inserted_id})
+    created = await collection.find_one({"_id": result.inserted_id, "owner_id": user.id})
     if not created:
         raise HTTPException(status_code=500, detail="Failed to create item")
 
@@ -75,6 +94,7 @@ async def list_items(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: AsyncIOMotorDatabase = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> list[Item]:
     """List pantry items ordered by FEFO (First Expire First Out) priority.
 
@@ -85,14 +105,15 @@ async def list_items(
         skip: Pagination offset.
         limit: Maximum results count.
         db: Injected database handle.
+        user: Authenticated tenant context.
 
     Returns:
         List of active inventory items ordered with earliest expiring first.
     """
     collection = db[COLLECTION_ITEMS]
 
-    # Exclude consumed items from active inventory listings.
-    filter_query: dict = {"consumed": False}
+    # Exclude consumed items and restrict query scope to calling tenant.
+    filter_query: dict = {"consumed": False, **owner_filter(user.id)}
 
     if location:
         filter_query["location"] = location.value
@@ -130,22 +151,25 @@ async def list_items(
 async def get_expiring_items(
     days: int = Query(3, ge=1, le=30, description="Days to look ahead"),
     db: AsyncIOMotorDatabase = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> list[Item]:
     """Retrieve pantry items expiring within a designated number of days.
 
     Args:
         days: Threshold number of days to inspect.
         db: Injected database handle.
+        user: Authenticated tenant context.
 
     Returns:
         List of items expiring soon, sorted chronologically.
     """
     collection = db[COLLECTION_ITEMS]
 
-    # Select unconsumed items with expiry dates falling within the lookahead window.
+    # Select tenant unconsumed items with expiry dates in lookahead window.
     cutoff = datetime.now(UTC) + timedelta(days=days)
     filter_query = {
         "consumed": False,
+        **owner_filter(user.id),
         "expiry_date": {"$lte": cutoff, "$gte": datetime.now(UTC)},
     }
 
@@ -162,12 +186,14 @@ async def get_expiring_items(
 async def get_item(
     item_id: str,
     db: AsyncIOMotorDatabase = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> Item:
     """Retrieve a single pantry item by unique identifier.
 
     Args:
         item_id: Unique record ID string.
         db: Injected database handle.
+        user: Authenticated tenant context.
 
     Returns:
         Found Item record.
@@ -182,7 +208,8 @@ async def get_item(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid item ID") from None
 
-    doc = await collection.find_one({"_id": obj_id})
+    # Scope lookup to item identifier and calling user to prevent BOLA access.
+    doc = await collection.find_one({"_id": obj_id, **owner_filter(user.id)})
     if not doc:
         raise HTTPException(status_code=404, detail="Item not found")
 
@@ -195,6 +222,7 @@ async def update_item(
     item_id: str,
     update: ItemUpdate,
     db: AsyncIOMotorDatabase = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> Item:
     """Perform partial update on pantry item attributes.
 
@@ -202,6 +230,7 @@ async def update_item(
         item_id: Target item ID string.
         update: Partial item update payload.
         db: Injected database handle.
+        user: Authenticated tenant context.
 
     Returns:
         Updated Item document.
@@ -223,8 +252,9 @@ async def update_item(
 
     update_dict["updated_at"] = datetime.now(UTC)
 
+    # Restrict mutation to item owned by the active caller.
     result = await collection.find_one_and_update(
-        {"_id": obj_id},
+        {"_id": obj_id, **owner_filter(user.id)},
         {"$set": update_dict},
         return_document=True,
     )
@@ -241,6 +271,7 @@ async def consume_item(
     item_id: str,
     quantity: float = Query(..., gt=0, description="Quantity to consume"),
     db: AsyncIOMotorDatabase = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> Item:
     """Deduct quantity from an inventory item or flag as consumed.
 
@@ -248,6 +279,7 @@ async def consume_item(
         item_id: Unique record ID string.
         quantity: Amount consumed in cooking or meal preparation.
         db: Injected database handle.
+        user: Authenticated tenant context.
 
     Returns:
         Updated Item record showing remaining quantity or consumed status.
@@ -262,7 +294,8 @@ async def consume_item(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid item ID") from None
 
-    doc = await collection.find_one({"_id": obj_id})
+    # Ensure calling user owns target pantry item prior to applying deductions.
+    doc = await collection.find_one({"_id": obj_id, **owner_filter(user.id)})
     if not doc:
         raise HTTPException(status_code=404, detail="Item not found")
 
@@ -277,7 +310,7 @@ async def consume_item(
         update_dict["quantity"] = new_quantity
 
     result = await collection.find_one_and_update(
-        {"_id": obj_id},
+        {"_id": obj_id, **owner_filter(user.id)},
         {"$set": update_dict},
         return_document=True,
     )
@@ -290,12 +323,14 @@ async def consume_item(
 async def delete_item(
     item_id: str,
     db: AsyncIOMotorDatabase = Depends(get_db),
+    user: AuthenticatedUser = Depends(get_current_user),
 ) -> None:
     """Hard-delete an inventory item from database storage.
 
     Args:
         item_id: Unique record ID string.
         db: Injected database handle.
+        user: Authenticated tenant context.
 
     Returns:
         None.
@@ -310,6 +345,7 @@ async def delete_item(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid item ID") from None
 
-    result = await collection.delete_one({"_id": obj_id})
+    # Enforce that delete actions cannot remove pantry rows of other users.
+    result = await collection.delete_one({"_id": obj_id, **owner_filter(user.id)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Item not found")

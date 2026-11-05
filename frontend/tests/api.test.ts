@@ -14,6 +14,8 @@ import {
   ingestText,
   ingestUrl,
   updateSettings,
+  setAuthToken,
+  getAuthToken,
 } from '../src/api'
 
 describe('API Client', () => {
@@ -349,5 +351,22 @@ describe('API Client', () => {
     expect(report.fully_satisfied).toBe(true)
     expect(report.deductions.length).toBe(1)
     expect(report.deductions[0].item_name).toBe('Toor Dal')
+  })
+
+  it('attaches Authorization header when authToken is set', async () => {
+    setAuthToken('test_jwt_token_123')
+    expect(getAuthToken()).toBe('test_jwt_token_123')
+
+    let sentHeaders: Headers | undefined
+    globalThis.fetch = mock(async (_url: any, init?: RequestInit) => {
+      sentHeaders = new Headers(init?.headers)
+      return new Response('[]', { status: 200 })
+    }) as any
+
+    await fetchRecipes()
+    expect(sentHeaders?.get('Authorization')).toBe('Bearer test_jwt_token_123')
+
+    setAuthToken(null)
+    expect(getAuthToken()).toBeNull()
   })
 })

@@ -28,6 +28,33 @@ import type {
 // In both production and dev single-port mode, FastAPI mounts the frontend directly at root.
 const BASE_URL = ''
 
+let authToken: string | null = null
+
+/**
+ * Configure active Clerk JWT bearer token for backend requests.
+ */
+export function setAuthToken(token: string | null): void {
+  authToken = token
+}
+
+/**
+ * Get active JWT bearer token.
+ */
+export function getAuthToken(): string | null {
+  return authToken
+}
+
+/**
+ * Attaches Authorization header if active JWT token is configured.
+ */
+export async function apiFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers || {})
+  if (authToken && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${authToken}`)
+  }
+  return fetch(input, { ...init, headers })
+}
+
 /**
  * Format FastAPI and Pydantic validation errors into human-readable messages.
  *
@@ -72,7 +99,7 @@ function parseErrorDetail(err: any): string {
  */
 export async function fetchRecipes(): Promise<Recipe[]> {
   // Query the recipes endpoint to load cards into the vault grid view.
-  const res = await fetch(`${BASE_URL}/api/v1/recipes`)
+  const res = await apiFetch(`${BASE_URL}/api/v1/recipes`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(parseErrorDetail(err))
@@ -89,7 +116,7 @@ export async function fetchRecipes(): Promise<Recipe[]> {
  */
 export async function fetchRecipeById(id: string): Promise<Recipe> {
   // Retrieve full recipe details when navigating into the dedicated detail view.
-  const res = await fetch(`${BASE_URL}/api/v1/recipes/${id}`)
+  const res = await apiFetch(`${BASE_URL}/api/v1/recipes/${id}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(parseErrorDetail(err))
@@ -106,7 +133,7 @@ export async function fetchRecipeById(id: string): Promise<Recipe> {
  */
 export async function createRecipe(recipe: Partial<Recipe>): Promise<Recipe> {
   // Persist manually authored recipes with JSON payload headers.
-  const res = await fetch(`${BASE_URL}/api/v1/recipes`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/recipes`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(recipe),
@@ -126,7 +153,7 @@ export async function createRecipe(recipe: Partial<Recipe>): Promise<Recipe> {
  */
 export async function deleteRecipe(id: string): Promise<void> {
   // Send DELETE request to clean up unwanted or duplicate recipe cards.
-  const res = await fetch(`${BASE_URL}/api/v1/recipes/${id}`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/recipes/${id}`, {
     method: 'DELETE',
   })
   if (!res.ok) {
@@ -145,7 +172,7 @@ export async function deleteRecipe(id: string): Promise<void> {
 export async function ingestUrl(url: string): Promise<Recipe> {
   // Pass URL as query parameter and JSON body to support both query and payload parsers.
   const encodedUrl = encodeURIComponent(url.trim())
-  const res = await fetch(`${BASE_URL}/api/v1/recipes/ingest?url=${encodedUrl}`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/recipes/ingest?url=${encodedUrl}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: url.trim() }),
@@ -171,7 +198,7 @@ export async function ingestUrl(url: string): Promise<Recipe> {
  */
 export async function ingestText(text: string, sourceName = 'Pasted recipe'): Promise<Recipe> {
   // Send text payload to the LLM extraction service.
-  const res = await fetch(`${BASE_URL}/api/v1/recipes/ingest/text`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/recipes/ingest/text`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, source_name: sourceName }),
@@ -201,7 +228,7 @@ export async function ingestImage(file: File, sourceName = 'Photo Upload'): Prom
   formData.append('file', file)
   formData.append('source_name', sourceName)
 
-  const res = await fetch(`${BASE_URL}/api/v1/recipes/ingest/image`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/recipes/ingest/image`, {
     method: 'POST',
     body: formData,
   })
@@ -229,7 +256,7 @@ export async function ingestAudio(file: File, sourceName = 'Voice Note'): Promis
   formData.append('file', file)
   formData.append('source_name', sourceName)
 
-  const res = await fetch(`${BASE_URL}/api/v1/recipes/ingest/audio`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/recipes/ingest/audio`, {
     method: 'POST',
     body: formData,
   })
@@ -257,7 +284,7 @@ export async function ingestVideo(file: File, sourceName = 'Cooking Reel'): Prom
   formData.append('file', file)
   formData.append('source_name', sourceName)
 
-  const res = await fetch(`${BASE_URL}/api/v1/recipes/ingest/video`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/recipes/ingest/video`, {
     method: 'POST',
     body: formData,
   })
@@ -279,7 +306,7 @@ export async function ingestVideo(file: File, sourceName = 'Cooking Reel'): Prom
  */
 export async function fetchInventory(): Promise<InventoryItem[]> {
   // Query inventory items to populate the Pantry FEFO status view.
-  const res = await fetch(`${BASE_URL}/api/v1/inventory`)
+  const res = await apiFetch(`${BASE_URL}/api/v1/inventory`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(parseErrorDetail(err))
@@ -296,7 +323,7 @@ export async function fetchInventory(): Promise<InventoryItem[]> {
  */
 export async function createInventoryItem(item: InventoryCreate): Promise<InventoryItem> {
   // Send JSON body to create inventory records with Indian units and locations.
-  const res = await fetch(`${BASE_URL}/api/v1/inventory`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/inventory`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(item),
@@ -316,7 +343,7 @@ export async function createInventoryItem(item: InventoryCreate): Promise<Invent
  */
 export async function deleteInventoryItem(id: string): Promise<void> {
   // Remove item from database when depleted or expired.
-  const res = await fetch(`${BASE_URL}/api/v1/inventory/${id}`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/inventory/${id}`, {
     method: 'DELETE',
   })
   if (!res.ok) {
@@ -333,7 +360,7 @@ export async function deleteInventoryItem(id: string): Promise<void> {
  */
 export async function fetchSettingsStatus(): Promise<SettingsStatus> {
   // Query settings to determine which AI providers and databases are available.
-  const res = await fetch(`${BASE_URL}/api/v1/settings`)
+  const res = await apiFetch(`${BASE_URL}/api/v1/settings`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(parseErrorDetail(err))
@@ -350,7 +377,7 @@ export async function fetchSettingsStatus(): Promise<SettingsStatus> {
  */
 export async function updateSettings(payload: UpdateSettingsPayload): Promise<SettingsStatus> {
   // Post user-supplied API keys to update runtime settings and persistent .env store.
-  const res = await fetch(`${BASE_URL}/api/v1/settings`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/settings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -381,7 +408,7 @@ export async function ingestReceiptImage(
     formData.append('store_hint', storeHint)
   }
 
-  const res = await fetch(`${BASE_URL}/api/v1/receipts/ingest/image`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/receipts/ingest/image`, {
     method: 'POST',
     body: formData,
   })
@@ -403,7 +430,7 @@ export async function confirmReceiptItems(
   payload: ReceiptConfirmPayload,
 ): Promise<ReceiptConfirmResponse> {
   // Send verified items to commit into inventory stock collection.
-  const res = await fetch(`${BASE_URL}/api/v1/receipts/confirm`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/receipts/confirm`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -429,7 +456,7 @@ export async function cookRecipe(
 ): Promise<DeductionReport> {
   // Trigger backend FEFO deduction to keep pantry stock synchronized with cooked meals.
   const url = `${BASE_URL}/api/v1/recipes/${recipeId}/cook?servings_multiplier=${servingsMultiplier}`
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: 'POST',
   })
   if (!res.ok) {
@@ -444,7 +471,7 @@ export async function cookRecipe(
  * Retrieve all items on the shopping list.
  */
 export async function fetchShoppingList(): Promise<ShoppingListItem[]> {
-  const res = await fetch(`${BASE_URL}/api/v1/shopping-list`)
+  const res = await apiFetch(`${BASE_URL}/api/v1/shopping-list`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(parseErrorDetail(err))
@@ -458,7 +485,7 @@ export async function fetchShoppingList(): Promise<ShoppingListItem[]> {
 export async function createShoppingItem(
   payload: ShoppingListItemCreate,
 ): Promise<ShoppingListItem> {
-  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/items`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/shopping-list/items`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -476,7 +503,7 @@ export async function createShoppingItem(
 export async function createShoppingItemsBatch(
   items: ShoppingListItemCreate[],
 ): Promise<ShoppingListItem[]> {
-  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/batch`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/shopping-list/batch`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ items }),
@@ -495,7 +522,7 @@ export async function updateShoppingItem(
   itemId: string,
   payload: ShoppingListItemUpdate,
 ): Promise<ShoppingListItem> {
-  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/items/${itemId}`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/shopping-list/items/${itemId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -511,7 +538,7 @@ export async function updateShoppingItem(
  * Delete a shopping list item.
  */
 export async function deleteShoppingItem(itemId: string): Promise<void> {
-  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/items/${itemId}`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/shopping-list/items/${itemId}`, {
     method: 'DELETE',
   })
   if (!res.ok) {
@@ -524,7 +551,7 @@ export async function deleteShoppingItem(itemId: string): Promise<void> {
  * Remove all checked items from the shopping list.
  */
 export async function clearPurchasedShoppingItems(): Promise<{ deleted_count: number }> {
-  const res = await fetch(`${BASE_URL}/api/v1/shopping-list/clear-purchased`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/shopping-list/clear-purchased`, {
     method: 'POST',
   })
   if (!res.ok) {
@@ -538,7 +565,7 @@ export async function clearPurchasedShoppingItems(): Promise<{ deleted_count: nu
  * Retrieve ranked vault recipes by pantry coverage and FEFO urgency.
  */
 export async function fetchWhatCanICook(readyOnly = false): Promise<PantryMatchResult[]> {
-  const res = await fetch(`${BASE_URL}/api/v1/cook-ai/what-can-i-cook?ready_only=${readyOnly}`)
+  const res = await apiFetch(`${BASE_URL}/api/v1/cook-ai/what-can-i-cook?ready_only=${readyOnly}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
     throw new Error(parseErrorDetail(err))
@@ -550,7 +577,7 @@ export async function fetchWhatCanICook(readyOnly = false): Promise<PantryMatchR
  * Retrieve culinary substitutions for a missing ingredient.
  */
 export async function fetchSubstitutions(ingredient: string): Promise<SubstitutionSuggestion[]> {
-  const res = await fetch(`${BASE_URL}/api/v1/cook-ai/substitutions`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/cook-ai/substitutions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ ingredient }),
@@ -568,7 +595,7 @@ export async function fetchSubstitutions(ingredient: string): Promise<Substituti
 export async function generatePantryRecipe(
   request: PantryToPlateRequest,
 ): Promise<PantryToPlateRecipe> {
-  const res = await fetch(`${BASE_URL}/api/v1/cook-ai/pantry-to-plate`, {
+  const res = await apiFetch(`${BASE_URL}/api/v1/cook-ai/pantry-to-plate`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
