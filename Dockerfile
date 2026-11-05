@@ -1,15 +1,15 @@
 # ──────────────────────────────────────────────
 # Stage 1: Build the React frontend
 # ──────────────────────────────────────────────
-FROM node:22-alpine AS frontend-build
+FROM oven/bun:1-alpine AS frontend-build
 
 WORKDIR /build/frontend
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci --ignore-scripts
+COPY frontend/package.json frontend/bun.lock ./
+RUN bun install --frozen-lockfile
 
 COPY frontend/ ./
 # Vite outputs to ../backend/web_dist relative to frontend/
-RUN mkdir -p ../backend && npm run build
+RUN mkdir -p ../backend && bun run build
 
 
 # ──────────────────────────────────────────────
