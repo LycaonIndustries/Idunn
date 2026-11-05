@@ -9,6 +9,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -116,21 +117,39 @@ def parse_gemini_response(response_text: str) -> dict[str, Any]:
 
 def call_gemini_api(api_key: str, prompt: str, model: str = DEFAULT_GEMINI_MODEL) -> str:
     """Call Google AI Studio Gemini API endpoint with structured JSON output."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1},
-    }
-    req = urllib.request.Request(
-        url, data=json.dumps(payload).encode("utf-8"), headers={"Content-Type": "application/json"}
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return str(data["candidates"][0]["content"]["parts"][0]["text"])
-    except (urllib.error.URLError, OSError, KeyError, IndexError) as err:
-        print(f"Gemini API request failed: {err}")
-        return ""
+    models_to_try = [model, "gemini-2.5-flash"] if model != "gemini-2.5-flash" else [model]
+    for target_model in models_to_try:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{target_model}:generateContent?key={api_key}"
+        )
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1},
+        }
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+        for attempt in range(2):
+            try:
+                with urllib.request.urlopen(req, timeout=45) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                    cands = data.get("candidates") or []
+                    if cands and (parts := (cands[0].get("content") or {}).get("parts")):
+                        return str(parts[0].get("text", ""))
+            except (
+                urllib.error.HTTPError,
+                urllib.error.URLError,
+                OSError,
+                KeyError,
+                IndexError,
+            ) as err:
+                print(f"Gemini API ({target_model}) attempt {attempt + 1} failed: {err}")
+                if attempt == 0:
+                    time.sleep(3)
+    return ""
 
 
 def build_github_review_payload(
@@ -218,24 +237,11 @@ def main() -> int:
 
         commit_sha = pr_sha or run_git(["rev-parse", args.head], root=root)
 
-        def post_notice(verdict: str, notice: str) -> None:
-            submit_github_pr_review(
-                token,
-                repo,
-                pr_num,
-                {
-                    "commit_id": commit_sha,
-                    "body": f"### Automated AI Review\n\n- **Verdict:** `{verdict}`\n- {notice}",
-                    "event": "COMMENT",
-                    "comments": [],
-                },
-            )
-
         if not is_valid:
-            post_notice("high-risk", f"**Error:** {gran_msg}")
+            print(f"Skipping AI review: {gran_msg}")
             return 0
         if not api_key:
-            post_notice("notice", "**Notice:** `GEMINI_API_KEY` missing from secrets.")
+            print("Skipping AI review: GEMINI_API_KEY missing from environment.")
             return 0
 
         diff_text = run_git(["diff", f"{args.base}...{args.head}"], root=root)
@@ -250,9 +256,19 @@ def main() -> int:
         prompt = build_review_prompt(
             diff_text, load_repository_rules(root / ".agents" / "rules"), sources
         )
-        parsed = parse_gemini_response(call_gemini_api(api_key, prompt))
+        raw_response = call_gemini_api(api_key, prompt)
+        if not raw_response:
+            print("Skipping AI review comment: received empty response or API error.")
+            return 0
+
+        parsed = parse_gemini_response(raw_response)
+        verdict = parsed.get("verdict", "")
+        if verdict in ("error", "unknown", ""):
+            print(f"Skipping AI review comment: model returned error verdict '{verdict}'.")
+            return 0
+
         payload = build_github_review_payload(
-            commit_sha, parsed["verdict"], parsed["summary"], parsed["findings"], valid_lines
+            commit_sha, verdict, parsed["summary"], parsed["findings"], valid_lines
         )
         submit_github_pr_review(token, repo, pr_num, payload)
         return 0

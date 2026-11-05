@@ -84,3 +84,33 @@ def test_build_github_review_payload() -> None:
     assert p["commit_id"] == "sha123" and p["event"] == "COMMENT"
     assert len(p["comments"]) == 1 and p["comments"][0]["line"] == 11
     assert "General note" in p["body"] and "File level" in p["body"]
+
+
+def test_main_skips_comment_on_gemini_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify that no review comment is posted when model returns error or empty string."""
+    from scripts import ai_review
+
+    called = False
+
+    def fake_submit(*args: object, **kwargs: object) -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(ai_review, "call_gemini_api", lambda *a, **kw: "")
+    monkeypatch.setattr(ai_review, "submit_github_pr_review", fake_submit)
+    monkeypatch.setenv("GITHUB_TOKEN", "fake-token")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "org/repo")
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    monkeypatch.setattr(
+        "sys.argv", ["ai_review.py", "--mode=github-pr", "--base=HEAD", "--head=HEAD"]
+    )
+    # Mock event path with PR info
+    monkeypatch.setattr(
+        ai_review,
+        "run_git",
+        lambda args, root=None: "sha1" if "rev-parse" in args else "",
+    )
+
+    exit_code = ai_review.main()
+    assert exit_code == 0
+    assert not called
