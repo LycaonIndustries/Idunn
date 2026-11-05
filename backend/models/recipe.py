@@ -83,6 +83,9 @@ class NutritionInfo(BaseModel):
     carbs: float | None = Field(None, ge=0, description="Carbohydrates in grams")
     fat: float | None = Field(None, ge=0, description="Fat in grams")
     fiber: float | None = Field(None, ge=0, description="Fiber in grams")
+    is_ifct_verified: bool = Field(
+        False, description="Whether macronutrients are verified via ICMR/NIN IFCT tables"
+    )
 
 
 # Core recipe fields common to inputs and saved database entities.
