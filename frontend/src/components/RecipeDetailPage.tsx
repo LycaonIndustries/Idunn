@@ -22,9 +22,13 @@ import {
   AlertTriangle,
   Loader2,
   X,
+  Sun,
 } from 'lucide-react'
 import type { DeductionReport, Recipe } from '../types'
 import { cookRecipe } from '../api'
+import { useScreenWakeLock } from '../hooks/useScreenWakeLock'
+import { extractStepDuration } from '../utils/duration'
+import { StepTimer } from './StepTimer'
 
 /**
  * Properties for RecipeDetailPage component.
@@ -71,6 +75,8 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
   const [cooking, setCooking] = useState(false)
   const [deductionReport, setDeductionReport] = useState<DeductionReport | null>(null)
   const [cookError, setCookError] = useState<string | null>(null)
+  const [keepAwake, setKeepAwake] = useState(false)
+  const { isLocked, isSupported } = useScreenWakeLock(keepAwake)
 
   // Resolve recipe ID handling MongoDB (_id) and Supabase (id) naming conventions.
   const recipeId = recipe.id || recipe._id || ''
@@ -163,6 +169,23 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               <Utensils className="w-3.5 h-3.5" />
             )}
             <span>I Cooked This</span>
+          </button>
+
+          <button
+            onClick={() => setKeepAwake((prev) => !prev)}
+            title={
+              isSupported
+                ? 'Keep screen awake during cooking'
+                : 'Screen Wake Lock API not supported on this browser'
+            }
+            className={`flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-colors cursor-pointer ${
+              keepAwake && isLocked
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 ring-1 ring-amber-500/40'
+                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+          >
+            <Sun className="w-3.5 h-3.5" />
+            <span>{keepAwake && isLocked ? 'Awake' : 'Keep Awake'}</span>
           </button>
 
           <button
@@ -570,12 +593,31 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
                           {step.instruction}
                         </p>
 
-                        {step.time_minutes && (
-                          <div className="mt-2.5 inline-flex items-center space-x-1.5 text-xs font-semibold text-orange-400 bg-orange-950/40 border border-orange-900/50 px-2.5 py-1 rounded-lg">
-                            <Clock className="w-3.5 h-3.5" />
-                            <span>{step.time_minutes} minutes</span>
-                          </div>
-                        )}
+                        {(() => {
+                          const durationSecs = extractStepDuration(
+                            step.instruction,
+                            step.time_minutes,
+                          )
+                          if (durationSecs && durationSecs > 0) {
+                            return (
+                              <div className="mt-2.5">
+                                <StepTimer
+                                  durationSeconds={durationSecs}
+                                  label={`Step ${step.step_number}`}
+                                />
+                              </div>
+                            )
+                          }
+                          if (step.time_minutes) {
+                            return (
+                              <div className="mt-2.5 inline-flex items-center space-x-1.5 text-xs font-semibold text-orange-400 bg-orange-950/40 border border-orange-900/50 px-2.5 py-1 rounded-lg">
+                                <Clock className="w-3.5 h-3.5" />
+                                <span>{step.time_minutes} minutes</span>
+                              </div>
+                            )
+                          }
+                          return null
+                        })()}
                       </div>
                     </div>
                   </div>
