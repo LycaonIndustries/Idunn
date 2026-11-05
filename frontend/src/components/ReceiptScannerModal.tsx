@@ -231,8 +231,17 @@ export const ReceiptScannerModal: React.FC<ReceiptScannerModalProps> = ({
 
               {/* Drag and drop upload zone. */}
               <div
+                role="button"
+                tabIndex={0}
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-700 hover:border-emerald-500 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-slate-950/50"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    fileInputRef.current?.click()
+                  }
+                }}
+                aria-label="Upload receipt screenshot"
+                className="border-2 border-dashed border-slate-700 hover:border-emerald-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-slate-950/50"
               >
                 <input
                   ref={fileInputRef}

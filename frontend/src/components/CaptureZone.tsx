@@ -263,8 +263,17 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
               Upload Cookbook Photo or Recipe Screenshot
             </div>
             <div
+              role="button"
+              tabIndex={0}
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  fileInputRef.current?.click()
+                }
+              }}
+              aria-label="Upload cookbook photo or recipe screenshot"
+              className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
             >
               <input
                 ref={fileInputRef}
@@ -292,8 +301,17 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
               Upload Voice Note or Spoken Recipe Audio
             </div>
             <div
+              role="button"
+              tabIndex={0}
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  fileInputRef.current?.click()
+                }
+              }}
+              aria-label="Upload voice note or spoken recipe audio"
+              className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
             >
               <input
                 ref={fileInputRef}
@@ -321,8 +339,17 @@ export const CaptureZone: React.FC<CaptureZoneProps> = ({
               Upload Silent Cooking Reel or Short Video
             </div>
             <div
+              role="button"
+              tabIndex={0}
               onClick={() => fileInputRef.current?.click()}
-              className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  fileInputRef.current?.click()
+                }
+              }}
+              aria-label="Upload cooking video reel"
+              className="border-2 border-dashed border-slate-800 hover:border-orange-500/60 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500 rounded-xl p-8 text-center cursor-pointer transition-colors bg-slate-950/60 hover:bg-orange-950/10"
             >
               <input
                 ref={fileInputRef}
