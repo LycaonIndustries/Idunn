@@ -468,6 +468,27 @@ export async function cookRecipe(
 
 
 /**
+ * Calculate per-serving macronutrients using ICMR/NIN IFCT tables.
+ *
+ * @param recipeId Target recipe identifier.
+ * @returns Updated recipe containing verified IFCT nutrition values.
+ * @throws Error if recalculation request fails.
+ */
+export async function calculateRecipeNutrition(recipeId: string): Promise<Recipe> {
+  // Request server recalculation using ICMR/NIN IFCT standards.
+  const url = `${BASE_URL}/api/v1/recipes/${recipeId}/nutrition/calculate`
+  const res = await apiFetch(url, {
+    method: 'POST',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+
+/**
  * Retrieve all items on the shopping list.
  */
 export async function fetchShoppingList(): Promise<ShoppingListItem[]> {

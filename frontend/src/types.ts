@@ -44,6 +44,8 @@ export interface NutritionInfo {
   fat?: number | null
   /** Dietary fiber in grams. */
   fiber?: number | null
+  /** Whether macronutrients are verified using ICMR/NIN IFCT standards. */
+  is_ifct_verified?: boolean | null
 }
 
 // Store full recipe record with metadata and media.

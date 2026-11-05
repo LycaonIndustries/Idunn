@@ -23,10 +23,12 @@ import {
   Loader2,
   X,
   Sun,
+  Camera,
 } from 'lucide-react'
 import type { DeductionReport, Recipe } from '../types'
 import { cookRecipe } from '../api'
 import { useScreenWakeLock } from '../hooks/useScreenWakeLock'
+import { useCameraGestures } from '../hooks/useCameraGestures'
 import { extractStepDuration } from '../utils/duration'
 import { StepTimer } from './StepTimer'
 
@@ -77,6 +79,46 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
   const [cookError, setCookError] = useState<string | null>(null)
   const [keepAwake, setKeepAwake] = useState(false)
   const { isLocked, isSupported } = useScreenWakeLock(keepAwake)
+
+  // Manage hands-free camera gesture navigation state.
+  const [handsFree, setHandsFree] = useState(false)
+
+  // Advance active recipe step and mark previous instruction finished.
+  const handleNextStep = () => {
+    if (!recipe.steps || recipe.steps.length === 0) return
+    setActiveStep((prev) => {
+      if (prev === null) return recipe.steps[0].step_number
+      const currentIndex = recipe.steps.findIndex((s) => s.step_number === prev)
+      if (currentIndex >= 0 && currentIndex < recipe.steps.length - 1) {
+        setCompletedSteps((c) => ({ ...c, [prev]: true }))
+        return recipe.steps[currentIndex + 1].step_number
+      }
+      return prev
+    })
+  }
+
+  // Retreat active recipe step to previous instruction.
+  const handlePrevStep = () => {
+    if (!recipe.steps || recipe.steps.length === 0) return
+    setActiveStep((prev) => {
+      if (prev === null) return recipe.steps[0].step_number
+      const currentIndex = recipe.steps.findIndex((s) => s.step_number === prev)
+      if (currentIndex > 0) {
+        return recipe.steps[currentIndex - 1].step_number
+      }
+      return prev
+    })
+  }
+
+  const {
+    isActive: isCameraActive,
+    isSupported: isCameraSupported,
+    lastGesture,
+  } = useCameraGestures({
+    enabled: handsFree,
+    onNextStep: handleNextStep,
+    onPrevStep: handlePrevStep,
+  })
 
   // Resolve recipe ID handling MongoDB (_id) and Supabase (id) naming conventions.
   const recipeId = recipe.id || recipe._id || ''
@@ -186,6 +228,23 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
           >
             <Sun className="w-3.5 h-3.5" />
             <span>{keepAwake && isLocked ? 'Awake' : 'Keep Awake'}</span>
+          </button>
+
+          <button
+            onClick={() => setHandsFree((prev) => !prev)}
+            title={
+              isCameraSupported
+                ? 'Hands-free camera gesture navigation'
+                : 'Camera gestures not supported on this browser'
+            }
+            className={`flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-colors cursor-pointer ${
+              handsFree && isCameraActive
+                ? 'bg-sky-500/20 text-sky-300 border-sky-500/40 ring-1 ring-sky-500/40'
+                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+          >
+            <Camera className="w-3.5 h-3.5" />
+            <span>{handsFree && isCameraActive ? 'Hands-Free On' : 'Hands-Free'}</span>
           </button>
 
           <button
@@ -350,7 +409,14 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               <Activity className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-slate-100">Nutritional Facts</h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-slate-100">Nutritional Facts</h2>
+                {nutrition?.is_ifct_verified && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    ICMR/NIN IFCT Verified
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-400">Captured & calculated per serving</p>
             </div>
           </div>
@@ -541,6 +607,46 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
               </div>
               <span className="text-xs text-slate-400">{recipe.steps.length} steps</span>
             </div>
+
+            {/* Hands-Free Camera Navigation Status Banner */}
+            {handsFree && (
+              <div className="mb-4 p-3 rounded-2xl bg-sky-950/40 border border-sky-500/30 flex items-center justify-between text-xs">
+                <div className="flex items-center space-x-2 text-sky-300">
+                  <Camera className="w-4 h-4 text-sky-400 animate-pulse" />
+                  <span>
+                    <strong>Hands-Free Active:</strong> Wave or cover camera to step (100% on-device)
+                  </span>
+                </div>
+                {lastGesture && (
+                  <span className="px-2 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-bold text-[10px] uppercase">
+                    {lastGesture === 'cover' ? 'Occlusion Step' : `${lastGesture} Step`}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Step Controls Bar for Tap or Gesture Fallback */}
+            {activeStep !== null && (
+              <div className="flex items-center justify-between mb-4 p-2.5 rounded-2xl bg-slate-950 border border-slate-800">
+                <button
+                  type="button"
+                  onClick={handlePrevStep}
+                  className="px-3 py-1 rounded-xl bg-slate-900 text-slate-300 hover:text-white border border-slate-800 text-xs font-semibold cursor-pointer"
+                >
+                  &larr; Prev Step
+                </button>
+                <span className="text-xs text-slate-400 font-medium">
+                  Step {activeStep} of {recipe.steps.length}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleNextStep}
+                  className="px-3 py-1 rounded-xl bg-orange-600/80 text-white hover:bg-orange-500 text-xs font-semibold cursor-pointer"
+                >
+                  Next Step &rarr;
+                </button>
+              </div>
+            )}
 
             <div className="space-y-4">
               {recipe.steps.map((step) => {

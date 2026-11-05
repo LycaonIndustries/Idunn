@@ -35,6 +35,7 @@ from ..models.recipe import (
     Region,
 )
 from ..services.cooking_deduction import CookingDeductionService, DeductionReport
+from ..services.ifct_nutrition import calculate_recipe_nutrition
 from ..services.recipe_ingest import IngestResult, RecipeIngestService, confirmed_ids
 from .deps import AuthenticatedUser, get_current_user
 from .limiter import limiter
@@ -142,9 +143,18 @@ async def create_recipe(
     # Initialize pending matches for all ingredients so review queue can flag them.
     now = datetime.now(UTC)
     matches = [IngredientMatch(ingredient_index=i) for i in range(len(recipe.ingredients))]
+
+    # Estimate nutritional profile automatically using IFCT standards when not supplied.
+    nutrition = recipe.nutrition
+    if nutrition is None:
+        computed = calculate_recipe_nutrition(recipe)
+        if computed.is_ifct_verified:
+            nutrition = computed
+
     doc = Recipe(
         _id=str(ObjectId()),
-        **recipe.model_dump(exclude={"owner_id"}),
+        **recipe.model_dump(exclude={"owner_id", "nutrition"}),
+        nutrition=nutrition,
         owner_id=user.id,
         created_at=now,
         updated_at=now,
@@ -657,6 +667,52 @@ async def review_recipe(
     )
     if updated is None:
         raise HTTPException(status_code=409, detail="Recipe changed; reload before reviewing")
+    return recipe_response(updated)
+
+
+@router.post("/{recipe_id}/nutrition/calculate", response_model=Recipe)
+async def calculate_recipe_nutrition_endpoint(
+    recipe_id: str,
+    db: Database,
+    user: CurrentUser,
+) -> Recipe:
+    """Calculate and attach ICMR/NIN IFCT nutrition values to a recipe.
+
+    Args:
+        recipe_id: Target recipe identifier.
+        db: Injected database handle.
+        user: Authenticated caller identity.
+
+    Returns:
+        Updated Recipe with verified IFCT nutrition information.
+
+    Raises:
+        HTTPException: If recipe does not exist.
+    """
+    # Scope recipe lookup to document ID and tenant owner to prevent data leakage.
+    doc = await db[COLLECTION_RECIPES].find_one(
+        {"_id": object_id(recipe_id), **owner_filter(user.id)}
+    )
+    if doc is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+
+    recipe = recipe_response(doc)
+    nutrition = calculate_recipe_nutrition(recipe)
+
+    # Persist calculated nutritional metrics into database record.
+    updated = await db[COLLECTION_RECIPES].find_one_and_update(
+        {"_id": doc["_id"], **owner_filter(user.id)},
+        {
+            "$set": {
+                "nutrition": nutrition.model_dump(),
+                "updated_at": datetime.now(UTC),
+            },
+            "$inc": {"revision": 1},
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Recipe not found")
     return recipe_response(updated)
 
 
