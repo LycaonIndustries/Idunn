@@ -20,7 +20,17 @@ from pymongo.errors import PyMongoError
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from .api import cook_ai, ingredients, inventory, jobs, planner, receipts, recipes, shopping_list
+from .api import (
+    cook_ai,
+    ingredients,
+    inventory,
+    jobs,
+    planner,
+    receipts,
+    recipes,
+    shopping_list,
+    users,
+)
 from .api import settings as settings_api
 from .api.limiter import limiter
 from .config import settings
@@ -133,6 +143,7 @@ app.include_router(settings_api.router)
 app.include_router(cook_ai.router)
 app.include_router(shopping_list.router)
 app.include_router(planner.router)
+app.include_router(users.router)
 app.include_router(jobs.router)
 
 

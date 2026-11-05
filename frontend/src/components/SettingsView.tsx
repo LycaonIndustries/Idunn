@@ -19,7 +19,12 @@ import {
   ChevronUp,
 } from 'lucide-react'
 import type { SettingsStatus } from '../types'
-import { fetchSettingsStatus, updateSettings } from '../api'
+import {
+  deleteUserAccount,
+  exportUserData,
+  fetchSettingsStatus,
+  updateSettings,
+} from '../api'
 
 /**
  * Properties for the SettingsView component.
@@ -133,6 +138,46 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
       setMessage({ type: 'error', text: msg })
     } finally {
       setSaving(false)
+    }
+  }
+
+  /**
+   * Generates and downloads a machine-readable JSON archive of all personal kitchen data.
+   */
+  const handleExportData = async () => {
+    try {
+      const data = await exportUserData()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `idunn_data_export_${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to export user data'
+      setMessage({ type: 'error', text: msg })
+    }
+  }
+
+  /**
+   * Prompts user and triggers cascade account deletion under GDPR / DPDP.
+   */
+  const handleDeleteAccount = async () => {
+    if (
+      !window.confirm(
+        'Are you sure you want to permanently delete your account and all associated pantry items, recipes, receipts, and meal plans? This action cannot be undone.'
+      )
+    ) {
+      return
+    }
+    try {
+      await deleteUserAccount()
+      window.alert('Account and all associated personal data have been completely erased.')
+      window.location.reload()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to erase account'
+      setMessage({ type: 'error', text: msg })
     }
   }
 
@@ -677,6 +722,36 @@ create policy "Allow all on recipes" on recipes for all using (true) with check 
           </button>
         </div>
       </form>
+
+      {/* GDPR / DPDP Privacy, Data Portability & Account Erasure */}
+      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-6 space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-200">
+            Data Privacy & Compliance (GDPR / DPDP)
+          </h2>
+          <p className="text-xs text-slate-400">
+            Export all personal kitchen records or execute irreversible cascade account erasure.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 pt-2">
+          <button
+            type="button"
+            onClick={() => void handleExportData()}
+            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition cursor-pointer"
+          >
+            Download Data Archive (JSON)
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void handleDeleteAccount()}
+            className="px-4 py-2 rounded-xl bg-red-950/60 hover:bg-red-900/60 text-red-300 text-xs font-semibold border border-red-800/60 transition cursor-pointer"
+          >
+            Delete My Account & Data
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

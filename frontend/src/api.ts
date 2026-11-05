@@ -691,3 +691,47 @@ export async function updateMealSlot(
   }
   return res.json()
 }
+
+export interface UserDataExport {
+  export_version: string
+  user_id: string
+  exported_at: string
+  inventory_items: unknown[]
+  recipes: unknown[]
+  receipts: unknown[]
+  meal_plans: unknown[]
+  shopping_list: unknown[]
+}
+
+export interface UserDeletionReport {
+  status: string
+  user_id: string
+  timestamp: string
+  deleted_counts: Record<string, number>
+}
+
+/**
+ * Download complete machine-readable archive of all personal kitchen data (GDPR/DPDP).
+ */
+export async function exportUserData(): Promise<UserDataExport> {
+  const res = await apiFetch(`${BASE_URL}/api/v1/users/me/export`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Permanently delete user account and cascade purge all personal data (GDPR/DPDP).
+ */
+export async function deleteUserAccount(): Promise<UserDeletionReport> {
+  const res = await apiFetch(`${BASE_URL}/api/v1/users/me`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
