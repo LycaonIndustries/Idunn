@@ -17,9 +17,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pymongo.errors import PyMongoError
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from .api import cook_ai, ingredients, inventory, planner, receipts, recipes, shopping_list
 from .api import settings as settings_api
+from .api.limiter import limiter
 from .config import settings
 from .db import MongoClient
 from .db.schemas import setup_database_validation
@@ -79,6 +82,10 @@ app = FastAPI(
     version=settings.app_version,
     lifespan=lifespan,
 )
+
+# Register rate limiter state and 429 Too Many Requests exception handler.
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Allow cross-origin requests from development web dev servers.
 app.add_middleware(

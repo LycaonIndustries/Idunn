@@ -217,3 +217,15 @@ async def update_settings(req: UpdateSettingsRequest) -> SettingsStatusResponse:
     # Invalidate settings lru_cache so fresh reads reload updated values.
     get_settings.cache_clear()
     return await get_settings_status()
+
+
+@router.get("/ai-usage")
+async def get_ai_usage_stats():
+    """Retrieve aggregated token consumption metrics and estimated USD costs for the current month.
+
+    Returns:
+        AIUsageSummary containing monthly token totals and budget utilization.
+    """
+    from ..services.ai_usage_tracker import get_monthly_ai_usage_summary
+
+    return await get_monthly_ai_usage_summary()
