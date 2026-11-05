@@ -6,16 +6,18 @@ import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from backend.db import get_db
 from backend.models.shopping import (
+    PantryGapResponse,
     ShoppingListBatchCreate,
     ShoppingListItem,
     ShoppingListItemCreate,
     ShoppingListItemUpdate,
     generate_quick_commerce_links,
 )
+from backend.services.gap_list import generate_pantry_gap_shopping_list
 
 logger = logging.getLogger("backend.api.shopping_list")
 
@@ -217,3 +219,39 @@ async def clear_purchased_items(db=Depends(get_db)) -> dict[str, int]:
     # Delete all items marked as purchased.
     res = await db.shopping_list.delete_many({"checked": True})
     return {"deleted_count": res.deleted_count}
+
+
+@router.post(
+    "/plan/{plan_id}/gap-analysis",
+    response_model=PantryGapResponse,
+    summary="Generate pantry gap shopping list from meal plan",
+)
+async def generate_plan_gap_shopping_list(
+    plan_id: str,
+    auto_add: bool = Query(default=False, description="Persist missing items into live list"),
+    owner_id: str = Query(default="default_user", description="Tenant user identifier"),
+    db=Depends(get_db),
+) -> PantryGapResponse:
+    """Analyze weekly meal plan ingredients and subtract pantry stock.
+
+    Args:
+        plan_id: Weekly meal plan document identifier.
+        auto_add: Whether to add gap items to live shopping list.
+        owner_id: Tenant user identifier.
+        db: Database session dependency.
+
+    Returns:
+        PantryGapResponse containing required, in-stock, and gap items.
+    """
+    try:
+        return await generate_pantry_gap_shopping_list(
+            plan_id=plan_id,
+            owner_id=owner_id,
+            db=db,
+            auto_add_to_list=auto_add,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
