@@ -19,17 +19,14 @@ from scripts.ai_review import (
 
 @pytest.mark.parametrize(
     ("lines", "expected_valid", "expected_text"),
-    [
-        (350, True, "PASS"),
-        (501, False, "exceeds"),
-    ],
+    [(350, True, "PASS"), (501, False, "exceeds")],
 )
 def test_check_granularity_limit(lines: int, expected_valid: bool, expected_text: str) -> None:
     """Verify granularity checks against maximum permitted lines."""
-    diff_stats = {"total_lines": lines, "additions": lines, "deletions": 0}
-    is_valid, message = check_granularity_limit(diff_stats, max_lines=500)
-    assert is_valid is expected_valid
-    assert expected_text in message
+    is_valid, message = check_granularity_limit(
+        {"total_lines": lines, "additions": lines, "deletions": 0}, max_lines=500
+    )
+    assert is_valid is expected_valid and expected_text in message
 
 
 def test_extract_valid_diff_lines() -> None:

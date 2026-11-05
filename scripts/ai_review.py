@@ -19,41 +19,18 @@ DEFAULT_GEMINI_MODEL = "gemini-flash-lite-latest"
 
 
 def run_git(args: list[str], root: Path | None = None) -> str:
-    """Execute git command and return standard output.
-
-    Args:
-        args: Git argument tokens.
-        root: Optional repository directory.
-
-    Returns:
-        Stripped standard output string.
-    """
-    # Prevent shell injection by passing argument tokens as list.
+    """Execute git command and return standard output."""
     res = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=True)
     return res.stdout.strip()
 
 
 def calculate_diff_stats(root: Path, base: str, head: str) -> dict[str, Any]:
-    """Calculate line additions and deletions against base branch.
-
-    Args:
-        root: Git repository root directory.
-        base: Target base branch or commit ref.
-        head: Active head branch or commit ref.
-
-    Returns:
-        Dictionary holding addition, deletion, and file count statistics.
-    """
-    # Measure branch diff metrics across merge base.
+    """Calculate line additions and deletions against base branch."""
     stat_out = run_git(["diff", f"{base}...{head}", "--shortstat"], root=root)
     name_out = run_git(["diff", f"{base}...{head}", "--name-only"], root=root)
     files = [f.strip() for f in name_out.splitlines() if f.strip()]
-    adds, dels = 0, 0
-    if stat_out:
-        add_m = re.search(r"(\d+)\s+insertion", stat_out)
-        del_m = re.search(r"(\d+)\s+deletion", stat_out)
-        adds = int(add_m.group(1)) if add_m else 0
-        dels = int(del_m.group(1)) if del_m else 0
+    adds = int(m.group(1)) if (m := re.search(r"(\d+)\s+insertion", stat_out)) else 0
+    dels = int(m.group(1)) if (m := re.search(r"(\d+)\s+deletion", stat_out)) else 0
     return {
         "base": base,
         "head": head,
@@ -67,16 +44,7 @@ def calculate_diff_stats(root: Path, base: str, head: str) -> dict[str, Any]:
 def check_granularity_limit(
     diff_stats: dict[str, Any], max_lines: int = DEFAULT_MAX_DIFF_LINES
 ) -> tuple[bool, str]:
-    """Verify that pull request line diff does not exceed granularity threshold.
-
-    Args:
-        diff_stats: Dictionary containing total diff count.
-        max_lines: Maximum permitted lines changed.
-
-    Returns:
-        Tuple of validity boolean and explanation message.
-    """
-    # Enforce atomic PR limits per AGENTS.md.
+    """Verify that pull request line diff does not exceed granularity threshold."""
     total = int(diff_stats.get("total_lines", 0))
     if total > max_lines:
         return False, f"PR exceeds limit ({total} lines, max {max_lines} per AGENTS.md)."
@@ -84,15 +52,7 @@ def check_granularity_limit(
 
 
 def extract_valid_diff_lines(diff_text: str) -> dict[str, set[int]]:
-    """Extract line numbers present in new side of unified diff hunks.
-
-    Args:
-        diff_text: Full raw git unified diff output.
-
-    Returns:
-        Mapping of relative file path to set of valid line numbers.
-    """
-    # Track valid lines to prevent GitHub rejecting comments outside diff.
+    """Extract line numbers present in new side of unified diff hunks."""
     valid_lines: dict[str, set[int]] = {}
     cur_file: str | None = None
     cur_line = 0
@@ -112,58 +72,31 @@ def extract_valid_diff_lines(diff_text: str) -> dict[str, set[int]]:
 
 
 def load_repository_rules(rules_dir: Path) -> str:
-    """Read all markdown rules from directory into unified instruction string.
-
-    Args:
-        rules_dir: Directory holding markdown rule documents.
-
-    Returns:
-        Consolidated markdown text representing active repository rules.
-    """
-    # Load all markdown rule guidelines in alphabetical order.
+    """Read all markdown rules from directory into unified instruction string."""
     if not rules_dir.is_dir():
         return ""
-    sections = [p.read_text("utf-8").strip() for p in sorted(rules_dir.glob("*.md"))]
-    return "\n\n---\n\n".join(s for s in sections if s)
+    return "\n\n---\n\n".join(
+        p.read_text("utf-8").strip() for p in sorted(rules_dir.glob("*.md")) if p.is_file()
+    )
 
 
 def build_review_prompt(diff_text: str, rules_text: str, changed_files: dict[str, str]) -> str:
-    """Build structured prompt for Gemini review model.
-
-    Args:
-        diff_text: Unified git diff text.
-        rules_text: Consolidated repository rules text.
-        changed_files: Mapping of file path to complete file source code.
-
-    Returns:
-        Formatted prompt string ready for model inference.
-    """
-    # Assemble code files and diff for evidence-grounded review.
+    """Build structured prompt for Gemini review model."""
     ctx = "\n\n".join(f"### File: {p}\n```\n{c}\n```" for p, c in changed_files.items())
     return (
-        f"You are the senior code reviewer for Iðunn Kitchen OS.\n\n"
-        f"### Rules\n{rules_text}\n\n"
-        f"### Instructions\n"
-        f"1. Linters passed. Focus on: logic/crashes, button disabled on submit, security.\n"
-        f"2. Check ASD-STE100 comments (WHY not what, <=25 words).\n"
-        f"3. Be skeptical. Only report provable issues from the diff.\n"
-        f'4. Output JSON: {{"verdict": "ready|needs-changes|high-risk", "summary": "...", '
-        f'"findings": [{{"file": "...", "line": 1, '
-        f'"severity": "L0|L1|nit", "explanation": "..."}}]}}\n\n'
+        f"You are the senior code reviewer for Iðunn Kitchen OS.\n\n### Rules\n{rules_text}\n\n"
+        "### Instructions\n"
+        "1. Linters passed. Focus on logic/crashes, button disabled on submit, security.\n"
+        "2. Check ASD-STE100 comments (WHY not what, <=25 words).\n"
+        '3. Output JSON: {"verdict": "ready|needs-changes|high-risk", "summary": "...",\n'
+        '   "findings": [{"file": "...", "line": 1, '
+        '"severity": "L0|L1|nit", "explanation": "..."}]}\n\n'
         f"### Files\n{ctx}\n\n### Diff\n```diff\n{diff_text}\n```\n"
     )
 
 
 def parse_gemini_response(response_text: str) -> dict[str, Any]:
-    """Parse and sanitize JSON response from Gemini model.
-
-    Args:
-        response_text: Raw text string received from model endpoint.
-
-    Returns:
-        Parsed dictionary holding verdict, summary, and findings.
-    """
-    # Strip code block wrappers if model includes markdown formatting.
+    """Parse and sanitize JSON response from Gemini model."""
     txt = response_text.strip()
     if not txt:
         return {"verdict": "error", "summary": "Empty model response.", "findings": []}
@@ -182,17 +115,7 @@ def parse_gemini_response(response_text: str) -> dict[str, Any]:
 
 
 def call_gemini_api(api_key: str, prompt: str, model: str = DEFAULT_GEMINI_MODEL) -> str:
-    """Call Google AI Studio Gemini API endpoint with structured JSON output.
-
-    Args:
-        api_key: Google AI Studio API key.
-        prompt: Full review prompt.
-        model: Gemini model identifier string.
-
-    Returns:
-        Response text content from the model.
-    """
-    # Execute REST request to Gemini endpoint with forced JSON mime type.
+    """Call Google AI Studio Gemini API endpoint with structured JSON output."""
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -217,19 +140,7 @@ def build_github_review_payload(
     findings: list[dict[str, Any]],
     valid_lines: dict[str, set[int]],
 ) -> dict[str, Any]:
-    """Construct GitHub PR review payload containing inline comments and summary.
-
-    Args:
-        commit_sha: Commit SHA of pull request head.
-        verdict: Review verdict string.
-        summary: Top-level summary description.
-        findings: List of finding dictionaries.
-        valid_lines: Mapping of valid diff lines per file.
-
-    Returns:
-        Review payload ready for GitHub REST API POST request.
-    """
-    # Separate inline diff comments from unanchored general findings.
+    """Construct GitHub PR review payload containing inline comments and summary."""
     inlines: list[dict[str, Any]] = []
     generals: list[str] = []
     for item in findings:
@@ -242,14 +153,9 @@ def build_github_review_payload(
         else:
             generals.append(f"- **{sev}** `{f}:{line}`: {exp}")
 
-    body = [
-        "### Automated AI Code Review",
-        "",
-        f"- **Verdict:** `{verdict}`",
-        f"- **Summary:** {summary}",
-    ]
+    body = [f"### Automated AI Code Review\n\n- **Verdict:** `{verdict}`\n- **Summary:** {summary}"]
     if generals:
-        body.extend(["", "#### General Findings", *generals])
+        body.append("\n#### General Findings\n" + "\n".join(generals))
     return {
         "commit_id": commit_sha,
         "body": "\n".join(body),
@@ -259,15 +165,7 @@ def build_github_review_payload(
 
 
 def submit_github_pr_review(token: str, repo: str, pr_number: int, payload: dict[str, Any]) -> None:
-    """Submit review payload to GitHub Pull Request Review API.
-
-    Args:
-        token: GitHub API access token.
-        repo: Repository name with owner prefix.
-        pr_number: Pull request number.
-        payload: Review payload dictionary.
-    """
-    # Submit review to GitHub PR review endpoint.
+    """Submit review payload to GitHub Pull Request Review API."""
     url = f"https://api.github.com/repos/{repo}/pulls/{pr_number}/reviews"
     req = urllib.request.Request(
         url,
@@ -281,22 +179,15 @@ def submit_github_pr_review(token: str, repo: str, pr_number: int, payload: dict
         },
         method="POST",
     )
-    try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            if resp.status in (200, 201):
-                print(f"Submitted AI review for PR #{pr_number}")
-    except (urllib.error.HTTPError, urllib.error.URLError) as err:
-        print(f"Failed to post PR review: {err}")
-    return None
+    with (
+        contextlib.suppress(urllib.error.HTTPError, urllib.error.URLError),
+        urllib.request.urlopen(req, timeout=30),
+    ):
+        print(f"Submitted AI review for PR #{pr_number}")
 
 
 def main() -> int:
-    """CLI entrypoint for automated code review runner.
-
-    Returns:
-        Process exit code integer.
-    """
-    # Parse CLI flags for audit or CI modes.
+    """CLI entrypoint for automated code review runner."""
     parser = argparse.ArgumentParser(description="Iðunn AI Code Review Runner")
     parser.add_argument("--mode", default="audit", choices=["audit", "github-pr"])
     parser.add_argument("--base", default="origin/main")
