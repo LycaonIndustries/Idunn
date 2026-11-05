@@ -64,6 +64,9 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
   // Visual confirmation timer for link clipboard copy.
   const [copied, setCopied] = useState(false)
 
+  // Track pending recipe deletion state to guard against double-submits.
+  const [deleting, setDeleting] = useState(false)
+
   // Track automatic pantry deduction request and result report.
   const [cooking, setCooking] = useState(false)
   const [deductionReport, setDeductionReport] = useState<DeductionReport | null>(null)
@@ -84,18 +87,36 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
     setCompletedSteps((prev) => ({ ...prev, [stepNum]: !prev[stepNum] }))
   }
 
-  // Copy current recipe browser URL to clipboard for family sharing.
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  // Copy current recipe browser URL to clipboard for family sharing with graceful fallback.
+  const handleShare = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Clipboard API unavailable')
+      }
+      await navigator.clipboard.writeText(window.location.href)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Fallback for non-secure contexts or denied permissions.
+      try {
+        window.prompt('Copy recipe link:', window.location.href)
+      } catch {
+        // Ignore if prompt is also unavailable.
+      }
+    }
   }
 
-  // Prompt confirmation dialog before permanent deletion from vault.
-  const handleDelete = () => {
+  // Prompt confirmation dialog before permanent deletion from vault with double-submit guard.
+  const handleDelete = async () => {
+    if (deleting) return
     if (window.confirm(`Are you sure you want to delete "${recipe.title}" from your vault?`)) {
-      onDelete(recipeId)
-      onBack()
+      try {
+        setDeleting(true)
+        await Promise.resolve(onDelete(recipeId))
+        onBack()
+      } catch {
+        setDeleting(false)
+      }
     }
   }
 
@@ -158,10 +179,15 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
 
           <button
             onClick={handleDelete}
-            title="Delete recipe"
-            className="text-slate-400 hover:text-red-400 bg-slate-900 border border-slate-800 p-2 rounded-xl transition-colors cursor-pointer"
+            disabled={deleting}
+            title={deleting ? 'Deleting recipe...' : 'Delete recipe'}
+            className="text-slate-400 hover:text-red-400 bg-slate-900 border border-slate-800 p-2 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
           >
-            <Trash2 className="w-4 h-4" />
+            {deleting ? (
+              <Loader2 className="w-4 h-4 animate-spin text-red-400" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
           </button>
         </div>
       </div>
@@ -432,8 +458,17 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
                 return (
                   <div
                     key={idx}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => toggleIngredient(idx)}
-                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start space-x-3 ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleIngredient(idx)
+                      }
+                    }}
+                    aria-label={`Toggle ingredient ${item.name}`}
+                    className={`p-3 rounded-2xl border transition-all cursor-pointer flex items-start space-x-3 focus:outline-none focus:ring-1 focus:ring-orange-500 ${
                       isChecked
                         ? 'bg-slate-950/40 border-slate-800/50 opacity-50'
                         : 'bg-slate-950/70 border-slate-800/80 hover:border-slate-700'
@@ -492,8 +527,17 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
                 return (
                   <div
                     key={step.step_number}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => setActiveStep(step.step_number)}
-                    className={`p-5 rounded-2xl border transition-all cursor-pointer relative ${
+                    onKeyDown={(e) => {
+                      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                        e.preventDefault()
+                        setActiveStep(step.step_number)
+                      }
+                    }}
+                    aria-label={`Select step ${step.step_number}`}
+                    className={`p-5 rounded-2xl border transition-all cursor-pointer relative focus:outline-none focus:ring-1 focus:ring-orange-500 ${
                       isCompleted
                         ? 'bg-slate-950/40 border-slate-800/50 opacity-60'
                         : isSelected

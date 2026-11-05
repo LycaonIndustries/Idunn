@@ -71,8 +71,17 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
         {/* Hero image banner with calorie badge overlay */}
         {recipe.image_url ? (
           <div
+            role="button"
+            tabIndex={0}
             onClick={() => onSelect?.(recipe)}
-            className="relative h-44 w-full overflow-hidden bg-slate-950 cursor-pointer"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onSelect?.(recipe)
+              }
+            }}
+            aria-label={`View recipe details for ${recipe.title}`}
+            className="relative h-44 w-full overflow-hidden bg-slate-950 cursor-pointer focus:outline-none focus:ring-2 focus:ring-orange-500"
           >
             <img
               src={recipe.image_url}
@@ -100,7 +109,19 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
         {/* Card header with dietary tag, regional badge, and title */}
         <div className="p-6">
           <div className="flex items-start justify-between gap-4">
-            <div className="flex-1 cursor-pointer" onClick={() => onSelect?.(recipe)}>
+            <div
+              role="button"
+              tabIndex={0}
+              className="flex-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-orange-500 rounded-lg"
+              onClick={() => onSelect?.(recipe)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onSelect?.(recipe)
+                }
+              }}
+              aria-label={`View recipe details for ${recipe.title}`}
+            >
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 {recipe.cuisine_type && (
                   <span
@@ -215,8 +236,17 @@ export const RecipeCard: React.FC<RecipeCardProps> = ({ recipe, onDelete, onSele
                 return (
                   <div
                     key={idx}
+                    role="button"
+                    tabIndex={0}
                     onClick={() => toggleCheck(idx)}
-                    className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-colors text-sm ${
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        toggleCheck(idx)
+                      }
+                    }}
+                    aria-label={`Toggle check for ${ing.name}`}
+                    className={`flex items-center justify-between p-2 rounded-xl cursor-pointer transition-colors text-sm focus:outline-none focus:ring-1 focus:ring-orange-500 ${
                       isChecked
                         ? 'bg-slate-900/40 text-slate-500 line-through'
                         : 'hover:bg-slate-900/80 text-slate-200'
