@@ -15,6 +15,8 @@ import { SettingsView } from './components/SettingsView'
 import { CookAIView } from './components/CookAIView'
 import { ShoppingListView } from './components/ShoppingListView'
 import { MealPlannerCalendar } from './components/MealPlannerCalendar'
+import { MultiCookProvider } from './context/MultiCookContext'
+import { MultiCookWorkspace } from './components/MultiCookWorkspace'
 import { Footer, type ComplianceTab } from './components/Footer'
 import {
   HelpDocsPage,
@@ -133,24 +135,33 @@ export function App() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-orange-500/30 selection:text-orange-200">
-      {/* Global application navbar with live item counters */}
-      <Navbar
-        activeTab={activeTab}
-        setActiveTab={handleTabChange}
-        recipeCount={recipes.length}
-        pantryCount={inventory.length}
-        isByokConfigured={isByokConfigured}
-      />
+    <MultiCookProvider>
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-orange-500/30 selection:text-orange-200">
+        {/* Global application navbar with live item counters */}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={handleTabChange}
+          recipeCount={recipes.length}
+          pantryCount={inventory.length}
+          isByokConfigured={isByokConfigured}
+        />
 
-      {/* Main content body switching between functional tabs */}
-      <main className="flex-1">
-        {complianceView === 'privacy' && <PrivacyPage onBack={() => setComplianceView(null)} />}
-        {complianceView === 'terms' && <TermsPage onBack={() => setComplianceView(null)} />}
-        {complianceView === 'docs' && <HelpDocsPage onBack={() => setComplianceView(null)} />}
-        {complianceView === 'support' && <SupportPage onBack={() => setComplianceView(null)} />}
+        {/* Multi-cook simultaneous dish workspace switcher */}
+        <MultiCookWorkspace
+          onSelectRecipe={(recipe) => {
+            setSelectedRecipe(recipe)
+            setActiveTab('vault')
+          }}
+        />
 
-        {!complianceView && activeTab === 'capture' && (
+        {/* Main content body switching between functional tabs */}
+        <main className="flex-1">
+          {complianceView === 'privacy' && <PrivacyPage onBack={() => setComplianceView(null)} />}
+          {complianceView === 'terms' && <TermsPage onBack={() => setComplianceView(null)} />}
+          {complianceView === 'docs' && <HelpDocsPage onBack={() => setComplianceView(null)} />}
+          {complianceView === 'support' && <SupportPage onBack={() => setComplianceView(null)} />}
+
+          {!complianceView && activeTab === 'capture' && (
           <CaptureZone
             onRecipeSaved={handleRecipeSaved}
             onNavigateToSettings={() => handleTabChange('settings')}
@@ -201,9 +212,10 @@ export function App() {
         )}
       </main>
 
-      {/* Universal compliance and navigation footer */}
-      <Footer onNavigateCompliance={(tab) => setComplianceView(tab)} />
-    </div>
+        {/* Universal compliance and navigation footer */}
+        <Footer onNavigateCompliance={(tab) => setComplianceView(tab)} />
+      </div>
+    </MultiCookProvider>
   )
 }
 
