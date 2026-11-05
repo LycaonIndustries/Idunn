@@ -375,3 +375,39 @@ export interface PantryToPlateRequest {
   servings?: number
   dietary_preference?: string | null
 }
+
+
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+
+export interface MealSlot {
+  meal_type: MealType
+  recipe_id?: string | null
+  recipe_title?: string | null
+  servings_multiplier: number
+  notes?: string | null
+}
+
+export interface DayPlan {
+  date: string
+  day_of_week: string
+  slots: MealSlot[]
+}
+
+export interface WeeklyMealPlan {
+  _id?: string
+  id?: string
+  owner_id: string
+  week_start_date: string
+  days: DayPlan[]
+  created_at?: string
+  updated_at?: string
+}
+
+export interface MealSlotUpdateRequest {
+  day_of_week: string
+  meal_type: MealType
+  recipe_id?: string | null
+  recipe_title?: string | null
+  servings_multiplier?: number
+  notes?: string | null
+}
