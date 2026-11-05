@@ -15,6 +15,8 @@ import { SettingsView } from './components/SettingsView'
 import { CookAIView } from './components/CookAIView'
 import { ShoppingListView } from './components/ShoppingListView'
 import { MealPlannerCalendar } from './components/MealPlannerCalendar'
+import { MultiCookProvider } from './context/MultiCookContext'
+import { MultiCookWorkspace } from './components/MultiCookWorkspace'
 
 /**
  * Main application container with tab navigation and state coordination.
@@ -124,18 +126,27 @@ export function App() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-orange-500/30 selection:text-orange-200">
-      {/* Global application navbar with live item counters */}
-      <Navbar
-        activeTab={activeTab}
-        setActiveTab={handleTabChange}
-        recipeCount={recipes.length}
-        pantryCount={inventory.length}
-        isByokConfigured={isByokConfigured}
-      />
+    <MultiCookProvider>
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-orange-500/30 selection:text-orange-200">
+        {/* Global application navbar with live item counters */}
+        <Navbar
+          activeTab={activeTab}
+          setActiveTab={handleTabChange}
+          recipeCount={recipes.length}
+          pantryCount={inventory.length}
+          isByokConfigured={isByokConfigured}
+        />
 
-      {/* Main content body switching between functional tabs */}
-      <main className="flex-1">
+        {/* Multi-cook simultaneous dish workspace switcher */}
+        <MultiCookWorkspace
+          onSelectRecipe={(recipe) => {
+            setSelectedRecipe(recipe)
+            setActiveTab('vault')
+          }}
+        />
+
+        {/* Main content body switching between functional tabs */}
+        <main className="flex-1">
         {activeTab === 'capture' && (
           <CaptureZone
             onRecipeSaved={handleRecipeSaved}
@@ -185,11 +196,12 @@ export function App() {
         {activeTab === 'settings' && <SettingsView onSettingsUpdated={loadSettings} />}
       </main>
 
-      {/* Persistent footer */}
-      <footer className="py-6 border-t border-slate-900 bg-slate-950 text-center text-xs text-slate-500">
-        <p>Iðunn Kitchen OS • Multimodal AI Recipe Vault & Pantry • Dark Mode Active</p>
-      </footer>
-    </div>
+        {/* Persistent footer */}
+        <footer className="py-6 border-t border-slate-900 bg-slate-950 text-center text-xs text-slate-500">
+          <p>Iðunn Kitchen OS • Multimodal AI Recipe Vault & Pantry • Dark Mode Active</p>
+        </footer>
+      </div>
+    </MultiCookProvider>
   )
 }
 

@@ -27,6 +27,7 @@ import {
 import type { DeductionReport, Recipe } from '../types'
 import { cookRecipe } from '../api'
 import { useScreenWakeLock } from '../hooks/useScreenWakeLock'
+import { useMultiCook } from '../context/MultiCookContext'
 import { extractStepDuration } from '../utils/duration'
 import { StepTimer } from './StepTimer'
 
@@ -77,6 +78,9 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
   const [cookError, setCookError] = useState<string | null>(null)
   const [keepAwake, setKeepAwake] = useState(false)
   const { isLocked, isSupported } = useScreenWakeLock(keepAwake)
+
+  // Attach multi-dish cooking session context.
+  const multiCook = useMultiCook()
 
   // Resolve recipe ID handling MongoDB (_id) and Supabase (id) naming conventions.
   const recipeId = recipe.id || recipe._id || ''
@@ -187,6 +191,17 @@ export const RecipeDetailPage: React.FC<RecipeDetailPageProps> = ({
             <Sun className="w-3.5 h-3.5" />
             <span>{keepAwake && isLocked ? 'Awake' : 'Keep Awake'}</span>
           </button>
+
+          {multiCook && (
+            <button
+              onClick={() => multiCook?.startCooking(recipe)}
+              title="Add this dish to multi-cook burner session"
+              className="flex items-center space-x-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl border transition-colors cursor-pointer bg-slate-900 text-orange-400 border-slate-800 hover:bg-orange-500/10 hover:border-orange-500/30"
+            >
+              <Flame className="w-3.5 h-3.5" />
+              <span>Multi-Cook</span>
+            </button>
+          )}
 
           <button
             onClick={handleShare}
