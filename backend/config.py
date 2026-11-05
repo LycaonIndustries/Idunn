@@ -88,6 +88,9 @@ class Settings(BaseSettings):
     clerk_publishable_key: str | None = None
     auth_enabled: bool = False
 
+    # Security & Configuration Lockdown
+    allow_env_writes: bool = False
+
     # CORS
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 

@@ -5,11 +5,13 @@ from __future__ import annotations
 import contextlib
 import os
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from ..config import get_settings, settings
+from .deps import AuthenticatedUser, get_current_user
 
 router = APIRouter(prefix="/api/v1/settings", tags=["settings"])
 
@@ -36,6 +38,7 @@ class SettingsStatusResponse(BaseModel):
     voyage_api_key_masked: str | None = None
     active_llm_provider: str
     env_file_exists: bool
+    allow_env_writes: bool = False
 
 
 class UpdateSettingsRequest(BaseModel):
@@ -123,8 +126,13 @@ def _write_env_file(updates: dict[str, str]) -> None:
 
 
 @router.get("", response_model=SettingsStatusResponse)
-async def get_settings_status() -> SettingsStatusResponse:
+async def get_settings_status(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+) -> SettingsStatusResponse:
     """Return status of database and all BYOK providers with masked keys.
+
+    Args:
+        user: Authenticated caller identity.
 
     Returns:
         SettingsStatusResponse containing configuration flags and masked keys.
@@ -147,15 +155,20 @@ async def get_settings_status() -> SettingsStatusResponse:
         voyage_api_key_masked=_mask_key(settings.voyage_api_key),
         active_llm_provider=_get_active_provider(),
         env_file_exists=ENV_PATH.is_file(),
+        allow_env_writes=settings.allow_env_writes,
     )
 
 
 @router.post("", response_model=SettingsStatusResponse)
-async def update_settings(req: UpdateSettingsRequest) -> SettingsStatusResponse:
-    """Update settings at runtime and persist them to local .env file.
+async def update_settings(
+    req: UpdateSettingsRequest,
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+) -> SettingsStatusResponse:
+    """Update settings at runtime and optionally persist them to local .env file.
 
     Args:
         req: Update request containing updated keys and model identifiers.
+        user: Authenticated caller identity.
 
     Returns:
         Updated SettingsStatusResponse.
@@ -209,19 +222,25 @@ async def update_settings(req: UpdateSettingsRequest) -> SettingsStatusResponse:
         os.environ["VOYAGE_API_KEY"] = val
         env_updates["VOYAGE_API_KEY"] = val
 
-    if env_updates:
+    # Guard disk modification to prevent arbitrary remote file corruption.
+    if env_updates and settings.allow_env_writes:
         # Suppress file IO exceptions so disk issues do not break memory updates.
         with contextlib.suppress(Exception):
             _write_env_file(env_updates)
 
     # Invalidate settings lru_cache so fresh reads reload updated values.
     get_settings.cache_clear()
-    return await get_settings_status()
+    return await get_settings_status(user)
 
 
 @router.get("/ai-usage")
-async def get_ai_usage_stats():
+async def get_ai_usage_stats(
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
+):
     """Retrieve aggregated token consumption metrics and estimated USD costs for the current month.
+
+    Args:
+        user: Authenticated caller identity.
 
     Returns:
         AIUsageSummary containing monthly token totals and budget utilization.
