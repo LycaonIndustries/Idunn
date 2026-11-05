@@ -15,6 +15,13 @@ import { SettingsView } from './components/SettingsView'
 import { CookAIView } from './components/CookAIView'
 import { ShoppingListView } from './components/ShoppingListView'
 import { MealPlannerCalendar } from './components/MealPlannerCalendar'
+import { Footer, type ComplianceTab } from './components/Footer'
+import {
+  HelpDocsPage,
+  PrivacyPage,
+  SupportPage,
+  TermsPage,
+} from './components/legal/CompliancePages'
 
 /**
  * Main application container with tab navigation and state coordination.
@@ -27,6 +34,7 @@ export function App() {
 
   // Hold currently viewed recipe for dedicated full-page inspection.
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null)
+  const [complianceView, setComplianceView] = useState<ComplianceTab | null>(null)
 
   // Cache recipes and inventory items in memory to eliminate redundant network roundtrips.
   const [recipes, setRecipes] = useState<Recipe[]>([])
@@ -82,6 +90,7 @@ export function App() {
   // This prevents the user from remaining trapped in a detail view on unrelated tabs.
   const handleTabChange = (tab: 'capture' | 'vault' | 'pantry' | 'cook-ai' | 'shopping' | 'planner' | 'settings') => {
     setSelectedRecipe(null)
+    setComplianceView(null)
     setActiveTab(tab)
   }
 
@@ -136,7 +145,12 @@ export function App() {
 
       {/* Main content body switching between functional tabs */}
       <main className="flex-1">
-        {activeTab === 'capture' && (
+        {complianceView === 'privacy' && <PrivacyPage onBack={() => setComplianceView(null)} />}
+        {complianceView === 'terms' && <TermsPage onBack={() => setComplianceView(null)} />}
+        {complianceView === 'docs' && <HelpDocsPage onBack={() => setComplianceView(null)} />}
+        {complianceView === 'support' && <SupportPage onBack={() => setComplianceView(null)} />}
+
+        {!complianceView && activeTab === 'capture' && (
           <CaptureZone
             onRecipeSaved={handleRecipeSaved}
             onNavigateToSettings={() => handleTabChange('settings')}
@@ -144,7 +158,7 @@ export function App() {
           />
         )}
 
-        {activeTab === 'vault' &&
+        {!complianceView && activeTab === 'vault' &&
           (selectedRecipe ? (
             <RecipeDetailPage
               recipe={selectedRecipe}
@@ -162,7 +176,7 @@ export function App() {
             />
           ))}
 
-        {activeTab === 'pantry' && (
+        {!complianceView && activeTab === 'pantry' && (
           <PantryView
             items={inventory}
             loading={inventoryLoading}
@@ -172,23 +186,23 @@ export function App() {
           />
         )}
 
-        {activeTab === 'cook-ai' && <CookAIView />}
+        {!complianceView && activeTab === 'cook-ai' && <CookAIView />}
 
-        {activeTab === 'shopping' && <ShoppingListView />}
+        {!complianceView && activeTab === 'shopping' && <ShoppingListView />}
 
-        {activeTab === 'planner' && (
+        {!complianceView && activeTab === 'planner' && (
           <div className="max-w-7xl mx-auto px-4 py-8">
             <MealPlannerCalendar recipes={recipes} onSelectRecipe={setSelectedRecipe} />
           </div>
         )}
 
-        {activeTab === 'settings' && <SettingsView onSettingsUpdated={loadSettings} />}
+        {!complianceView && activeTab === 'settings' && (
+          <SettingsView onSettingsUpdated={loadSettings} />
+        )}
       </main>
 
-      {/* Persistent footer */}
-      <footer className="py-6 border-t border-slate-900 bg-slate-950 text-center text-xs text-slate-500">
-        <p>Iðunn Kitchen OS • Multimodal AI Recipe Vault & Pantry • Dark Mode Active</p>
-      </footer>
+      {/* Universal compliance and navigation footer */}
+      <Footer onNavigateCompliance={(tab) => setComplianceView(tab)} />
     </div>
   )
 }
