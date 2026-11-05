@@ -24,6 +24,7 @@ dependencies = [
     "python-multipart>=0.0.33",
     "supabase>=2.34.0",
     "filetype>=1.2.0",
+    "pyjwt[crypto]>=2.9.0",
     "tenacity>=9.2.1",
 ]
 
