@@ -67,27 +67,32 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
   const [showOpenAI, setShowOpenAI] = useState(false)
   const [showVoyage, setShowVoyage] = useState(false)
 
-  /**
-   * Loads current settings configuration and masked credentials from the backend.
-   */
-  const loadStatus = async () => {
-    setLoading(true)
-    try {
-      const data = await fetchSettingsStatus()
-      setStatus(data)
-      if (data.gemini_model) setGeminiModel(data.gemini_model)
-      if (data.supabase_url) setSupabaseUrl(data.supabase_url)
-    } catch (err: unknown) {
-      console.error('Failed to load settings:', err)
-      setMessage({ type: 'error', text: 'Could not connect to settings backend.' })
-    } finally {
-      setLoading(false)
-    }
-  }
-
   // Load existing configuration once on component mount to populate status badges.
   useEffect(() => {
-    void loadStatus()
+    let cancelled = false
+    async function init() {
+      try {
+        const data = await fetchSettingsStatus()
+        if (!cancelled) {
+          setStatus(data)
+          if (data.gemini_model) setGeminiModel(data.gemini_model)
+          if (data.supabase_url) setSupabaseUrl(data.supabase_url)
+        }
+      } catch (err: unknown) {
+        console.error('Failed to load settings:', err)
+        if (!cancelled) {
+          setMessage({ type: 'error', text: 'Could not connect to settings backend.' })
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+    void init()
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   /**

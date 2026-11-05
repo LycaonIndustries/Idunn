@@ -228,6 +228,13 @@ async def update_settings(
         with contextlib.suppress(Exception):
             _write_env_file(env_updates)
 
+    # Persist settings to local data volume and database collection.
+    if env_updates:
+        from ..services.settings_storage import save_persisted_settings
+
+        with contextlib.suppress(Exception):
+            await save_persisted_settings(env_updates)
+
     # Invalidate settings lru_cache so fresh reads reload updated values.
     get_settings.cache_clear()
     return await get_settings_status(user)

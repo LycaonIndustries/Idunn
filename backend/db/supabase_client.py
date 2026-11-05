@@ -460,6 +460,56 @@ class SupabaseClientManager:
     _supabase_client: Client | None = None
     _memory_db: Any = None
     _collections: dict[str, SupabaseCollection] = {}
+    _hydrated_tables: set[str] = set()
+
+    @classmethod
+    async def hydrate_table(cls, table_name: str) -> None:
+        """Hydrate in-memory collection cache from remote Supabase table.
+
+        Args:
+            table_name: Canonical collection or table name to hydrate.
+        """
+        # Skip if already hydrated or if running without cloud credentials.
+        if table_name in cls._hydrated_tables or not cls.is_configured():
+            return
+        sb = cls.get_supabase_client()
+        if sb is None:
+            return
+        loop = asyncio.get_running_loop()
+        try:
+            res = await loop.run_in_executor(
+                None,
+                lambda: sb.table(table_name).select("*").execute(),
+            )
+            if res.data:
+                mem_col = cls.get_memory_db()[table_name]
+                await mem_col.delete_many({})
+                for row in res.data:
+                    doc = dict(row)
+                    if "id" in doc and "_id" not in doc:
+                        doc["_id"] = doc["id"]
+                    await mem_col.insert_one(doc)
+            cls._hydrated_tables.add(table_name)
+        except Exception:
+            # Table might not exist yet in remote schema.
+            pass
+
+    @classmethod
+    async def hydrate_all(cls) -> None:
+        """Hydrate primary data collections from Supabase on application startup."""
+        if not cls.is_configured():
+            return
+        tables = [
+            "recipes",
+            "items",
+            "ingredients",
+            "meal_plans",
+            "shopping_lists",
+            "receipts",
+            "settings",
+        ]
+        for table in tables:
+            await cls.hydrate_table(table)
 
     @classmethod
     def get_memory_db(cls) -> Any:
@@ -514,6 +564,7 @@ class SupabaseClientManager:
         """Reset cached client connection and collections after settings change."""
         cls._supabase_client = None
         cls._collections.clear()
+        cls._hydrated_tables.clear()
 
     @classmethod
     async def _execute_ping(cls, loop: asyncio.AbstractEventLoop, sb: Client) -> None:

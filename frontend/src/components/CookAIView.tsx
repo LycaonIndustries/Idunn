@@ -27,20 +27,30 @@ export function CookAIView() {
   const [generating, setGenerating] = useState(false)
   const [generatedRecipe, setGeneratedRecipe] = useState<PantryToPlateRecipe | null>(null)
 
-  async function loadMatches(ready: boolean) {
-    try {
-      setLoading(true)
-      setMatches(await fetchWhatCanICook(ready))
-      setError(null)
-    } catch (err: any) {
-      setError(err.message || 'Failed to rank vault recipes')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
-    if (tab === 'vault') void loadMatches(readyOnly)
+    if (tab !== 'vault') return
+    let cancelled = false
+    async function init() {
+      try {
+        const data = await fetchWhatCanICook(readyOnly)
+        if (!cancelled) {
+          setMatches(data)
+          setError(null)
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err.message || 'Failed to rank vault recipes')
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+    void init()
+    return () => {
+      cancelled = true
+    }
   }, [tab, readyOnly])
 
   async function handleFindSubstitutes(ing: string) {

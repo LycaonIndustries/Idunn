@@ -28,7 +28,7 @@ import {
 import type { DeductionReport, Recipe } from '../types'
 import { cookRecipe } from '../api'
 import { useScreenWakeLock } from '../hooks/useScreenWakeLock'
-import { useMultiCook } from '../context/MultiCookContext'
+import { useMultiCook } from '../context/useMultiCook'
 import { useCameraGestures } from '../hooks/useCameraGestures'
 import { extractStepDuration } from '../utils/duration'
 import { StepTimer } from './StepTimer'

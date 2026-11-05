@@ -42,12 +42,11 @@ export function App() {
   const [recipes, setRecipes] = useState<Recipe[]>([])
   const [inventory, setInventory] = useState<InventoryItem[]>([])
   const [settingsStatus, setSettingsStatus] = useState<SettingsStatus | null>(null)
-  const [recipesLoading, setRecipesLoading] = useState(false)
-  const [inventoryLoading, setInventoryLoading] = useState(false)
+  const [recipesLoading, setRecipesLoading] = useState(true)
+  const [inventoryLoading, setInventoryLoading] = useState(true)
 
   // Fetch all recipes from the backend and populate local state.
   const loadRecipes = useCallback(async () => {
-    setRecipesLoading(true)
     try {
       const data = await fetchRecipes()
       setRecipes(data)
@@ -60,7 +59,6 @@ export function App() {
 
   // Fetch active pantry inventory for FEFO expiration monitoring.
   const loadInventory = useCallback(async () => {
-    setInventoryLoading(true)
     try {
       const data = await fetchInventory()
       setInventory(data)
@@ -83,10 +81,30 @@ export function App() {
 
   // Synchronize initial data once on mount.
   useEffect(() => {
-    void loadRecipes()
-    void loadInventory()
-    void loadSettings()
-  }, [loadRecipes, loadInventory, loadSettings])
+    let cancelled = false
+    async function init() {
+      try {
+        const [recipesData, inventoryData, settingsData] = await Promise.allSettled([
+          fetchRecipes(),
+          fetchInventory(),
+          fetchSettingsStatus(),
+        ])
+        if (cancelled) return
+        if (recipesData.status === 'fulfilled') setRecipes(recipesData.value)
+        if (inventoryData.status === 'fulfilled') setInventory(inventoryData.value)
+        if (settingsData.status === 'fulfilled') setSettingsStatus(settingsData.value)
+      } finally {
+        if (!cancelled) {
+          setRecipesLoading(false)
+          setInventoryLoading(false)
+        }
+      }
+    }
+    void init()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // Reset selected recipe detail view when switching main navigation tabs.
   // This prevents the user from remaining trapped in a detail view on unrelated tabs.

@@ -10,7 +10,6 @@ export function useScreenWakeLock(enabled: boolean) {
   // Manage native Screen Wake Lock lifecycle based on active toggle.
   useEffect(() => {
     if (!enabled || typeof navigator === 'undefined' || !('wakeLock' in navigator)) {
-      setIsLocked(false)
       return
     }
 
@@ -47,7 +46,7 @@ export function useScreenWakeLock(enabled: boolean) {
   }, [enabled])
 
   return {
-    isLocked,
+    isLocked: enabled && isLocked,
     isSupported: typeof navigator !== 'undefined' && 'wakeLock' in navigator,
   }
 }
