@@ -3,9 +3,21 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from enum import StrEnum
 from urllib.parse import quote
 
 from pydantic import BaseModel, Field
+
+
+class AisleCategory(StrEnum):
+    """Supermarket and grocery store aisle categories."""
+
+    PRODUCE = "Produce"
+    DAIRY = "Dairy"
+    SPICES = "Spices"
+    GRAINS = "Grains"
+    STAPLES = "Staples"
+    OTHER = "Other"
 
 
 def generate_quick_commerce_links(item_name: str) -> dict[str, str]:
@@ -64,3 +76,26 @@ class ShoppingListItem(BaseModel):
         default_factory=dict,
         description="Search deep links to Blinkit, Zepto, and Instamart.",
     )
+
+
+class AggregatedShoppingItem(BaseModel):
+    """Aggregated ingredient requirement with pantry deduction and aisle mapping."""
+
+    name: str = Field(description="Normalized ingredient name")
+    required_quantity: float = Field(description="Total amount required across meals")
+    in_stock_quantity: float = Field(default=0.0, description="Available pantry stock")
+    gap_quantity: float = Field(description="Missing amount needed to purchase")
+    unit: str = Field(description="Measurement unit")
+    aisle: AisleCategory = Field(default=AisleCategory.OTHER, description="Store aisle")
+    recipes: list[str] = Field(default_factory=list, description="Source recipe titles")
+    quick_links: dict[str, str] = Field(default_factory=dict, description="Quick commerce links")
+
+
+class PantryGapResponse(BaseModel):
+    """Response bundle returning pantry gap analysis for a meal plan."""
+
+    plan_id: str = Field(description="Target weekly meal plan identifier")
+    week_start_date: str = Field(description="Monday start date (YYYY-MM-DD)")
+    gap_items: list[AggregatedShoppingItem] = Field(description="Ingredients with stock gaps")
+    total_gap_count: int = Field(description="Count of missing ingredients")
+    added_to_shopping_list: bool = Field(default=False, description="Added to live shopping list")
