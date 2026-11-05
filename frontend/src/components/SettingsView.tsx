@@ -139,7 +139,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onSettingsUpdated })
   /**
    * Copies the Supabase SQL schema to the user clipboard for quick database initialization.
    */
-  const handleCopySql = () => {
+  const handleCopySql = async () => {
     // Provide embedded DDL script so users can bootstrap tables without finding repo files.
     const sql = `-- Supabase Schema for Iðunn
 create table if not exists items (
@@ -206,9 +206,19 @@ create policy "Allow all on ingredients" on ingredients for all using (true) wit
 create policy "Allow all on recipes" on recipes for all using (true) with check (true);`
 
     // Write schema string directly to system clipboard for one-click setup.
-    navigator.clipboard.writeText(sql)
-    setCopiedSql(true)
-    setTimeout(() => setCopiedSql(false), 2000)
+    try {
+      if (!navigator.clipboard?.writeText) {
+        throw new Error('Clipboard API unavailable')
+      }
+      await navigator.clipboard.writeText(sql)
+      setCopiedSql(true)
+      setTimeout(() => setCopiedSql(false), 2000)
+    } catch {
+      setMessage({
+        type: 'error',
+        text: 'Failed to copy SQL to clipboard. Please copy manually from the schema guide.',
+      })
+    }
   }
 
   return (
