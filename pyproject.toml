@@ -23,6 +23,7 @@ dependencies = [
     "isodate>=0.7.2",
     "python-multipart>=0.0.33",
     "supabase>=2.34.0",
+    "pyjwt[crypto]>=2.9.0",
 ]
 
 [dependency-groups]

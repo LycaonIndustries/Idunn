@@ -81,6 +81,13 @@ class Settings(BaseSettings):
     # OCR
     paddle_ocr_enabled: bool = True
 
+    # Auth (Clerk)
+    clerk_secret_key: str | None = None
+    clerk_issuer: str | None = None
+    clerk_jwks_url: str | None = None
+    clerk_publishable_key: str | None = None
+    auth_enabled: bool = False
+
     # CORS
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
 
