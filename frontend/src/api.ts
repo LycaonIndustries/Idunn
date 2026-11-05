@@ -561,6 +561,35 @@ export async function clearPurchasedShoppingItems(): Promise<{ deleted_count: nu
   return res.json()
 }
 
+export interface WhatsAppExport {
+  text: string
+  whatsapp_url: string
+}
+
+/**
+ * Export current shopping list as emoji-formatted WhatsApp message.
+ */
+export async function exportShoppingListWhatsApp(): Promise<WhatsAppExport> {
+  const res = await apiFetch(`${BASE_URL}/api/v1/shopping-list/export/whatsapp`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
+/**
+ * Export weekly meal plan as emoji-formatted WhatsApp schedule.
+ */
+export async function exportMealPlanWhatsApp(planId: string): Promise<WhatsAppExport> {
+  const res = await apiFetch(`${BASE_URL}/api/v1/planner/${planId}/export/whatsapp`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(parseErrorDetail(err))
+  }
+  return res.json()
+}
+
 /**
  * Retrieve ranked vault recipes by pantry coverage and FEFO urgency.
  */

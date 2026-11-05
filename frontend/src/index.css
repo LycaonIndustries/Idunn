@@ -11,3 +11,14 @@ body {
   color: #f8fafc;
   min-height: 100vh;
 }
+
+@media print {
+  /* Clean A4 print styles for refrigerator door notes */
+  nav, button, input, form {
+    display: none !important;
+  }
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}

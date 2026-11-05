@@ -19,6 +19,11 @@ from ..models.planner import (
     MealType,
     WeeklyMealPlan,
 )
+from ..services.export_formatters import (
+    format_whatsapp_meal_plan,
+    generate_whatsapp_share_url,
+)
+from .shopping_list import WhatsAppExportResponse
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/planner", tags=["planner"])
@@ -235,3 +240,35 @@ async def delete_weekly_meal_plan(
     res = await db[COLLECTION_MEAL_PLANS].delete_one({"_id": plan_id, "owner_id": owner_id})
     if getattr(res, "deleted_count", 1) == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found.")
+
+
+@router.get("/{plan_id}/export/whatsapp", response_model=WhatsAppExportResponse)
+async def export_weekly_meal_plan_whatsapp(
+    plan_id: str,
+    db: Database,
+    owner_id: str = Query(default="default_user"),
+) -> WhatsAppExportResponse:
+    """Format weekly meal plan into an emoji-rich WhatsApp message.
+
+    Args:
+        plan_id: Target plan identifier.
+        db: Database session dependency.
+        owner_id: Tenant caller identifier.
+
+    Returns:
+        WhatsAppExportResponse containing message text and share link.
+
+    Raises:
+        HTTPException: If plan not found.
+    """
+    # Fetch meal plan record from database.
+    doc = await db[COLLECTION_MEAL_PLANS].find_one({"_id": plan_id, "owner_id": owner_id})
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found.")
+
+    plan = WeeklyMealPlan.model_validate(doc)
+    text = format_whatsapp_meal_plan(plan)
+    return WhatsAppExportResponse(
+        text=text,
+        whatsapp_url=generate_whatsapp_share_url(text),
+    )
