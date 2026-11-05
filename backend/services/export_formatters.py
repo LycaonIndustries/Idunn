@@ -14,24 +14,29 @@ if TYPE_CHECKING:
     from ..models.shopping import AggregatedShoppingItem, ShoppingListItem
 
 # Keyword sets for categorizing groceries into familiar Indian kitchen groups.
-PRODUCE_KEYWORDS = (
-    "onion pyaz tomato tamatar potato aloo palak spinach ginger adrak garlic lahsun "
-    "coriander dhaniya chilli mirch carrot gajar peas matar gobi cauliflower bhindi "
-    "okra lemon nimbu curry leaves methi"
-).split()
+# fmt: off
+PRODUCE_KEYWORDS = [
+    "onion", "pyaz", "tomato", "tamatar", "potato", "aloo", "palak", "spinach",
+    "ginger", "adrak", "garlic", "lahsun", "coriander", "dhaniya", "chilli", "mirch",
+    "carrot", "gajar", "peas", "matar", "gobi", "cauliflower", "bhindi", "okra",
+    "lemon", "nimbu", "curry", "leaves", "methi",
+]
 
-DAIRY_KEYWORDS = (
-    "paneer milk doodh curd dahi yogurt butter makhan ghee cheese egg anda chicken mutton fish"
-).split()
+DAIRY_KEYWORDS = [
+    "paneer", "milk", "doodh", "curd", "dahi", "yogurt", "butter", "makhan",
+    "ghee", "cheese", "egg", "anda", "chicken", "mutton", "fish",
+]
 
-SPICE_KEYWORDS = (
-    "haldi turmeric jeera cumin chilli powder garam masala salt namak rai mustard "
-    "hing cardamom elaichi clove cinnamon"
-).split()
+SPICE_KEYWORDS = [
+    "haldi", "turmeric", "jeera", "cumin", "chilli", "powder", "garam", "masala",
+    "salt", "namak", "rai", "mustard", "hing", "cardamom", "elaichi", "clove", "cinnamon",
+]
 
-STAPLE_KEYWORDS = (
-    "atta flour rice chawal dal lentil oil tel sugar cheeni poha sooji rava besan chana rajma bread"
-).split()
+STAPLE_KEYWORDS = [
+    "atta", "flour", "rice", "chawal", "dal", "lentil", "oil", "tel", "sugar",
+    "cheeni", "poha", "sooji", "rava", "besan", "chana", "rajma", "bread",
+]
+# fmt: on
 
 
 def categorize_ingredient(name: str) -> str:
