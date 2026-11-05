@@ -9,11 +9,9 @@ services:
       - path: .env
         required: false
     environment:
-      - DATABASE_BACKEND=${DATABASE_BACKEND:-supabase}
+      - DATABASE_BACKEND=supabase
       - SUPABASE_URL=${SUPABASE_URL:-}
       - SUPABASE_KEY=${SUPABASE_KEY:-}
-      - MONGODB_URL=mongodb://mongo:27017
-      - MONGODB_DB_NAME=idunn
       - REDIS_URL=redis://redis:6379
       - ALLOW_ENV_WRITES=true
       - PORT=8000
@@ -31,15 +29,5 @@ services:
     ports:
       - "6379:6379"
 
-  # ── MongoDB (Local Persistent Document Store) ───────────────
-  mongo:
-    image: mongo:7
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-
 volumes:
   idunn-data:
-  mongo-data:

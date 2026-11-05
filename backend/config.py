@@ -27,14 +27,10 @@ class Settings(BaseSettings):
     debug: bool = False
     log_level: str = "INFO"
 
-    # Database
-    database_backend: str = "supabase"  # "supabase" or "mongodb"
+    # Database (Supabase Cloud PostgreSQL is canonical)
+    database_backend: str = "supabase"
     supabase_url: str | None = None
     supabase_key: str | None = None
-
-    # MongoDB (legacy / optional)
-    mongodb_url: str = "mongodb://localhost:27017"
-    mongodb_db_name: str = "idunn"
 
     # Redis (for Arq jobs)
     redis_url: str = "redis://localhost:6379"

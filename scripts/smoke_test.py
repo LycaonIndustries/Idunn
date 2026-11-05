@@ -129,7 +129,28 @@ def run_smoke_tests() -> int:
     else:
         check("PATCH /api/v1/planner/{id}/slot", False, "Missing plan_id")
 
-    # 11. SPA catch-all guards API routes from returning HTML
+    # 11. Recipe Creation and Deletion (Verifies fix for recipe deletion 404)
+    res_rec = client.post(
+        "/api/v1/recipes",
+        json={
+            "title": "Smoke Test Dal",
+            "servings": 2,
+            "ingredients": [{"name": "toor dal", "quantity": 1.0, "unit": "cup"}],
+            "steps": [{"step_number": 1, "instruction": "Boil dal with water"}],
+        },
+    )
+    rec_created = res_rec.status_code in (200, 201)
+    rec_data = res_rec.json() if rec_created else {}
+    rec_id = rec_data.get("_id") or rec_data.get("id")
+    check("POST /api/v1/recipes (Create Recipe)", rec_created and bool(rec_id))
+
+    if rec_id:
+        res_del = client.delete(f"/api/v1/recipes/{rec_id}")
+        check("DELETE /api/v1/recipes/{id} (Delete Recipe)", res_del.status_code == 204)
+    else:
+        check("DELETE /api/v1/recipes/{id}", False, "Missing rec_id")
+
+    # 12. SPA catch-all guards API routes from returning HTML
     res = client.get("/api/v1/nonexistent-route")
     check(
         "Unhandled API path returns JSON 404 (not HTML index.html)",
