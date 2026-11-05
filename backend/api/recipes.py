@@ -36,10 +36,26 @@ from ..models.recipe import (
 )
 from ..services.cooking_deduction import CookingDeductionService, DeductionReport
 from ..services.recipe_ingest import IngestResult, RecipeIngestService, confirmed_ids
+from .deps import AuthenticatedUser, get_current_user
 from .limiter import limiter
 
 router = APIRouter(prefix="/api/v1/recipes", tags=["recipes"])
 Database = Annotated[AsyncIOMotorDatabase, Depends(get_db)]
+CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
+
+
+def owner_filter(user_id: str) -> dict:
+    """Build tenant query filter supporting legacy untagged documents in dev mode.
+
+    Args:
+        user_id: Unique caller identifier.
+
+    Returns:
+        Mongo query dictionary scoped to tenant.
+    """
+    if user_id == "dev_user_local":
+        return {"$or": [{"owner_id": user_id}, {"owner_id": {"$exists": False}}]}
+    return {"owner_id": user_id}
 
 
 def get_ingest_service(db: Database) -> RecipeIngestService:
@@ -108,12 +124,17 @@ def revision_filter(doc: dict, revision: int) -> dict:
 
 
 @router.post("", response_model=Recipe, status_code=201)
-async def create_recipe(recipe: RecipeCreate, db: Database) -> Recipe:
+async def create_recipe(
+    recipe: RecipeCreate,
+    db: Database,
+    user: CurrentUser,
+) -> Recipe:
     """Create a new manual recipe entry.
 
     Args:
         recipe: Recipe creation payload.
         db: Injected database handle.
+        user: Authenticated caller identity.
 
     Returns:
         Created Recipe record.
@@ -123,7 +144,8 @@ async def create_recipe(recipe: RecipeCreate, db: Database) -> Recipe:
     matches = [IngredientMatch(ingredient_index=i) for i in range(len(recipe.ingredients))]
     doc = Recipe(
         _id=str(ObjectId()),
-        **recipe.model_dump(),
+        **recipe.model_dump(exclude={"owner_id"}),
+        owner_id=user.id,
         created_at=now,
         updated_at=now,
         ingest_source="manual",
@@ -132,6 +154,7 @@ async def create_recipe(recipe: RecipeCreate, db: Database) -> Recipe:
     )
     data = doc.model_dump(exclude={"id"})
     data["_id"] = ObjectId(doc.id)
+    data["owner_id"] = user.id
     await db[COLLECTION_RECIPES].insert_one(data)
     return doc
 
@@ -139,6 +162,7 @@ async def create_recipe(recipe: RecipeCreate, db: Database) -> Recipe:
 @router.get("", response_model=list[Recipe])
 async def list_recipes(
     db: Database,
+    user: CurrentUser,
     query: str | None = Query(None, max_length=200),
     region: Region | None = None,
     cuisine_type: CuisineType | None = None,
@@ -150,6 +174,7 @@ async def list_recipes(
 
     Args:
         db: Injected database handle.
+        user: Authenticated caller identity.
         query: Optional search keyword matching title or description.
         region: Optional Indian culinary region.
         cuisine_type: Optional dietary category.
@@ -160,7 +185,8 @@ async def list_recipes(
     Returns:
         List of matching Recipe records.
     """
-    filters: dict = {}
+    # Isolate queries to caller tenant records to prevent data leakage.
+    filters: dict = {**owner_filter(user.id)}
     # Apply regex search with escaped input to prevent regex injection attacks.
     if query:
         filters["$or"] = [
@@ -181,6 +207,7 @@ async def list_recipes(
 @router.get("/review", response_model=list[Recipe])
 async def review_queue(
     db: Database,
+    user: CurrentUser,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
 ) -> list[Recipe]:
@@ -188,15 +215,20 @@ async def review_queue(
 
     Args:
         db: Injected database handle.
+        user: Authenticated caller identity.
         skip: Pagination offset.
         limit: Maximum results count.
 
     Returns:
         List of recipes flagged with needs_review=True.
     """
-    # Fetch unconfirmed recipe extractions to present in human-in-the-loop review queue.
+    # Fetch unconfirmed recipe extractions for active tenant review queue.
     cursor = (
-        db[COLLECTION_RECIPES].find({"needs_review": True}).sort("_id", 1).skip(skip).limit(limit)
+        db[COLLECTION_RECIPES]
+        .find({"needs_review": True, **owner_filter(user.id)})
+        .sort("_id", 1)
+        .skip(skip)
+        .limit(limit)
     )
     return [recipe_response(doc) async for doc in cursor]
 
@@ -206,6 +238,7 @@ async def review_queue(
 async def ingest_recipe(
     request: Request,
     service: IngestService,
+    user: CurrentUser,
     url: str | None = Query(None, min_length=1, max_length=500),
     body: RecipeUrlInput | None = None,
 ) -> IngestResult:
@@ -214,6 +247,7 @@ async def ingest_recipe(
     Args:
         request: Incoming HTTP request for rate limiting.
         service: Ingestion service dependency.
+        user: Authenticated caller identity.
         url: URL provided via query parameter.
         body: URL provided via JSON body payload.
 
@@ -229,7 +263,13 @@ async def ingest_recipe(
             status_code=422,
             detail="A 'url' parameter (query string or JSON body) is required.",
         )
-    return await service.ingest_from_url(target_url)
+    result = await service.ingest_from_url(target_url)
+    # Bind imported recipe to calling tenant to enforce object-level isolation.
+    await service.db[COLLECTION_RECIPES].update_one(
+        {"_id": ObjectId(result.recipe_id)},
+        {"$set": {"owner_id": user.id}},
+    )
+    return result
 
 
 @router.post("/ingest/text", response_model=IngestResult, status_code=201)
@@ -238,6 +278,7 @@ async def ingest_recipe_text(
     request: Request,
     payload: RecipeTextInput,
     service: IngestService,
+    user: CurrentUser,
 ) -> IngestResult:
     """Import and extract structured recipe from pasted text.
 
@@ -245,16 +286,24 @@ async def ingest_recipe_text(
         request: Incoming HTTP request for rate limiting.
         payload: Input text and attribution name.
         service: Ingestion service dependency.
+        user: Authenticated caller identity.
 
     Returns:
         IngestResult with parsed recipe.
     """
-    return await service.ingest_from_text(payload.text, payload.source_name)
+    result = await service.ingest_from_text(payload.text, payload.source_name)
+    # Stamp owner identity on text-extracted recipe document.
+    await service.db[COLLECTION_RECIPES].update_one(
+        {"_id": ObjectId(result.recipe_id)},
+        {"$set": {"owner_id": user.id}},
+    )
+    return result
 
 
 @router.post("/ingest/image", response_model=IngestResult, status_code=201)
 async def ingest_recipe_image(
     service: IngestService,
+    user: CurrentUser,
     file: UploadFile = File(...),
     source_name: str = Form("Image Upload"),
 ) -> IngestResult:
@@ -262,6 +311,7 @@ async def ingest_recipe_image(
 
     Args:
         service: Ingestion service dependency.
+        user: Authenticated caller identity.
         file: Uploaded image file stream.
         source_name: Attribution name for recipe source.
 
@@ -289,12 +339,19 @@ async def ingest_recipe_image(
             status_code=413,
             detail="Image size exceeds the 10 MB limit.",
         )
-    return await service.ingest_from_image(content, file.content_type, source_name)
+    result = await service.ingest_from_image(content, file.content_type, source_name)
+    # Bind vision-extracted recipe to calling tenant identity.
+    await service.db[COLLECTION_RECIPES].update_one(
+        {"_id": ObjectId(result.recipe_id)},
+        {"$set": {"owner_id": user.id}},
+    )
+    return result
 
 
 @router.post("/ingest/audio", response_model=IngestResult, status_code=201)
 async def ingest_recipe_audio(
     service: IngestService,
+    user: CurrentUser,
     file: UploadFile = File(...),
     source_name: str = Form("Voice Note"),
 ) -> IngestResult:
@@ -302,6 +359,7 @@ async def ingest_recipe_audio(
 
     Args:
         service: Ingestion service dependency.
+        user: Authenticated caller identity.
         file: Uploaded audio file stream.
         source_name: Attribution name.
 
@@ -332,12 +390,19 @@ async def ingest_recipe_audio(
             status_code=413,
             detail="Audio size exceeds the 50 MB limit.",
         )
-    return await service.ingest_from_audio(content, content_type or "audio/mp3", source_name)
+    result = await service.ingest_from_audio(content, content_type or "audio/mp3", source_name)
+    # Bind transcribed recipe to calling tenant identity.
+    await service.db[COLLECTION_RECIPES].update_one(
+        {"_id": ObjectId(result.recipe_id)},
+        {"$set": {"owner_id": user.id}},
+    )
+    return result
 
 
 @router.post("/ingest/video", response_model=IngestResult, status_code=201)
 async def ingest_recipe_video(
     service: IngestService,
+    user: CurrentUser,
     file: UploadFile = File(...),
     source_name: str = Form("Video Reel"),
 ) -> IngestResult:
@@ -345,6 +410,7 @@ async def ingest_recipe_video(
 
     Args:
         service: Ingestion service dependency.
+        user: Authenticated caller identity.
         file: Uploaded video file stream.
         source_name: Attribution name.
 
@@ -375,16 +441,27 @@ async def ingest_recipe_video(
             status_code=413,
             detail="Video size exceeds the 100 MB limit.",
         )
-    return await service.ingest_from_video(content, content_type or "video/mp4", source_name)
+    result = await service.ingest_from_video(content, content_type or "video/mp4", source_name)
+    # Bind video-extracted recipe to calling tenant identity.
+    await service.db[COLLECTION_RECIPES].update_one(
+        {"_id": ObjectId(result.recipe_id)},
+        {"$set": {"owner_id": user.id}},
+    )
+    return result
 
 
 @router.get("/{recipe_id}", response_model=Recipe)
-async def get_recipe(recipe_id: str, db: Database) -> Recipe:
+async def get_recipe(
+    recipe_id: str,
+    db: Database,
+    user: CurrentUser,
+) -> Recipe:
     """Retrieve a recipe by unique database identifier.
 
     Args:
         recipe_id: Unique record ID string.
         db: Injected database handle.
+        user: Authenticated caller identity.
 
     Returns:
         Found Recipe record.
@@ -392,7 +469,10 @@ async def get_recipe(recipe_id: str, db: Database) -> Recipe:
     Raises:
         HTTPException: If recipe is not found.
     """
-    doc = await db[COLLECTION_RECIPES].find_one({"_id": object_id(recipe_id)})
+    # Scope recipe lookup to document ID and tenant owner to prevent BOLA exposure.
+    doc = await db[COLLECTION_RECIPES].find_one(
+        {"_id": object_id(recipe_id), **owner_filter(user.id)}
+    )
     if doc is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return recipe_response(doc)
@@ -402,6 +482,7 @@ async def get_recipe(recipe_id: str, db: Database) -> Recipe:
 async def cook_recipe(
     recipe_id: str,
     db: Database,
+    user: CurrentUser,
     servings_multiplier: float = Query(1.0, ge=0.1, le=10.0),
 ) -> DeductionReport:
     """Deduct recipe ingredients from pantry stock using FEFO rules.
@@ -409,6 +490,7 @@ async def cook_recipe(
     Args:
         recipe_id: Target recipe identifier.
         db: Injected database handle.
+        user: Authenticated caller identity.
         servings_multiplier: Scale multiplier for ingredient quantities.
 
     Returns:
@@ -417,8 +499,10 @@ async def cook_recipe(
     Raises:
         HTTPException: If recipe is not found.
     """
-    # Verify target recipe exists before attempting pantry deduction.
-    doc = await db[COLLECTION_RECIPES].find_one({"_id": object_id(recipe_id)})
+    # Verify target recipe belongs to the caller before attempting pantry deduction.
+    doc = await db[COLLECTION_RECIPES].find_one(
+        {"_id": object_id(recipe_id), **owner_filter(user.id)}
+    )
     if doc is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
 
@@ -435,6 +519,7 @@ async def update_recipe(
     recipe_id: str,
     update: RecipeUpdate,
     db: Database,
+    user: CurrentUser,
 ) -> Recipe:
     """Partially update an existing recipe and increment revision number.
 
@@ -442,6 +527,7 @@ async def update_recipe(
         recipe_id: Unique record ID string.
         update: Fields to update.
         db: Injected database handle.
+        user: Authenticated caller identity.
 
     Returns:
         Updated Recipe document.
@@ -450,7 +536,7 @@ async def update_recipe(
         HTTPException: If recipe is missing, payload is empty, or version conflict occurs.
     """
     collection = db[COLLECTION_RECIPES]
-    doc = await collection.find_one({"_id": object_id(recipe_id)})
+    doc = await collection.find_one({"_id": object_id(recipe_id), **owner_filter(user.id)})
     if doc is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     changes = update.model_dump(exclude_unset=True)
@@ -478,9 +564,11 @@ async def update_recipe(
         changes.update(embedding=None, embedding_model=None)
     changes["updated_at"] = datetime.now(UTC)
 
-    # Increment revision using optimistic lock to detect concurrent edits.
+    # Enforce optimistic lock query scoped to tenant owner.
+    match_query = {**revision_filter(doc, current.revision), **owner_filter(user.id)}
+
     updated = await collection.find_one_and_update(
-        revision_filter(doc, current.revision),
+        match_query,
         {"$set": changes, "$inc": {"revision": 1}},
         return_document=ReturnDocument.AFTER,
     )
@@ -494,6 +582,7 @@ async def review_recipe(
     recipe_id: str,
     review: RecipeReview,
     db: Database,
+    user: CurrentUser,
 ) -> Recipe:
     """Submit human review decisions for recipe ingredient mappings.
 
@@ -501,6 +590,7 @@ async def review_recipe(
         recipe_id: Unique record ID string.
         review: Review decisions payload.
         db: Injected database handle.
+        user: Authenticated caller identity.
 
     Returns:
         Updated Recipe document with confirmed ingredient associations.
@@ -509,7 +599,7 @@ async def review_recipe(
         HTTPException: If recipe is missing, version conflict occurs, or decisions are invalid.
     """
     collection = db[COLLECTION_RECIPES]
-    doc = await collection.find_one({"_id": object_id(recipe_id)})
+    doc = await collection.find_one({"_id": object_id(recipe_id), **owner_filter(user.id)})
     if doc is None:
         raise HTTPException(status_code=404, detail="Recipe not found")
     current = recipe_response(doc)
@@ -548,8 +638,10 @@ async def review_recipe(
     extraction_reviewed = current.extraction_reviewed or review.approve_extraction
 
     # Update matches, mark confirmed IDs, and increment revision number.
+    match_query = {**revision_filter(doc, review.revision), **owner_filter(user.id)}
+
     updated = await collection.find_one_and_update(
-        revision_filter(doc, review.revision),
+        match_query,
         {
             "$set": {
                 "ingredient_matches": [match.model_dump() for match in ordered],
@@ -572,12 +664,14 @@ async def review_recipe(
 async def delete_recipe(
     recipe_id: str,
     db: Database,
+    user: CurrentUser,
 ) -> Response:
     """Delete a recipe record from the library.
 
     Args:
         recipe_id: Unique record ID string.
         db: Injected database handle.
+        user: Authenticated caller identity.
 
     Returns:
         HTTP 204 No Content response.
@@ -585,7 +679,9 @@ async def delete_recipe(
     Raises:
         HTTPException: If recipe does not exist.
     """
-    result = await db[COLLECTION_RECIPES].delete_one({"_id": object_id(recipe_id)})
+    result = await db[COLLECTION_RECIPES].delete_one(
+        {"_id": object_id(recipe_id), **owner_filter(user.id)}
+    )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return Response(status_code=204)

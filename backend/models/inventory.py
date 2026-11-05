@@ -123,6 +123,10 @@ class ItemBase(BaseModel):
     expiry_date: datetime | None = Field(None, description="Expiry date (for FEFO ordering)")
     notes: str | None = Field(None, max_length=500, description="Optional notes")
     barcode: str | None = Field(None, max_length=50, description="Barcode for quick add")
+    owner_id: str = Field(
+        default="dev_user_local",
+        description="Owner user identifier for tenant isolation",
+    )
 
 
 # New item creation records current UTC time.
